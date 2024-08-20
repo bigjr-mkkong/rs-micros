@@ -7,7 +7,8 @@ use core::arch::asm;
 macro_rules! print
 {
     ($($args:tt)+) => ({
-
+        use core::fmt::Write;
+        let _ = write!(crate::uart::Uart::new(0x10000000), $($args)+);
     });
 }
 
@@ -38,7 +39,7 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
         println!("line {}, file {}: {}",
             p.line(),
             p.file(),
-            info.message.unwrap());
+            info.message().unwrap());
     }else{
         println!("PanicInfo not available yet");
     }
@@ -59,9 +60,20 @@ fn abort() -> ! {
 #[no_mangle]
 extern "C"
 fn kmain(){
+    let mut UART = uart::Uart::new(0x10000000);
+    UART.init();
+
+    println!("\nHello world");
+
     loop{
+        if let Some(c) = UART.get() {
+            println!("{}", c as char);
+        }
         unsafe{
             asm!("nop");
         }
     }
 }
+
+
+pub mod uart;
