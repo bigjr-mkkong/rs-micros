@@ -43,6 +43,9 @@ debug: all dump
 	./mk-disk
 	$(QEMU) -machine $(MACH) -cpu $(CPU) -smp $(CPUS) -m $(MEM)  -nographic -serial mon:stdio -bios none -kernel $(OUT) -drive if=none,format=raw,file=$(DRIVE),id=foo -device virtio-blk-device,scsi=off,drive=foo -s -S
 
+bitstream: all
+	riscv64-linux-gnu-objcopy -I elf64-littleriscv -O binary os.elf os.bin
+
 dump: all
 	$(OBJDUMP) -D $(OUT) > dump
 
@@ -51,4 +54,5 @@ clean:
 	cargo clean
 	rm -f $(OUT)
 	rm dump
+	rm os.bin
 

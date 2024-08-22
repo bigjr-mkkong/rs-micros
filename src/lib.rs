@@ -1,7 +1,13 @@
 #![no_std]
 #![feature(panic_info_message, asm)]
 
+extern "C" {
+    static HEAP_START: u8;
+    static HEAP_SIZE: u8;
+}
+
 use core::arch::asm;
+use core::mem::MaybeUninit;
 
 #[macro_export]
 macro_rules! print
@@ -57,13 +63,23 @@ fn abort() -> ! {
     }
 }
 
+
 #[no_mangle]
 extern "C"
 fn kmain(){
-    let mut UART = uart::Uart::new(0x10000000);
+    let mut UART = uart::Uart::new(0x1000_0000);
     UART.init();
 
     println!("\nHello world");
+
+    let mut sys_zones = zone::system_zones::new();
+
+    unsafe{
+        let begin_ref: *const u8 = &HEAP_START as *const u8;
+        let size_ref: *const u8 = &HEAP_SIZE as *const u8;
+        sys_zones.add_newzone(begin_ref as usize, size_ref as usize, zone::zone_type::ZONE_NORMAL);
+        sys_zones.print_all();
+    }
 
     loop{
         if let Some(c) = UART.get() {
@@ -77,3 +93,4 @@ fn kmain(){
 
 
 pub mod uart;
+pub mod zone;

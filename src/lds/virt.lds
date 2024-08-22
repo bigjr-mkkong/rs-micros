@@ -44,7 +44,7 @@ SECTIONS
   PROVIDE(_memory_start = ORIGIN(ram));
   PROVIDE(_stack = _bss_end + 0x80000);
   PROVIDE(_memory_end = ORIGIN(ram) + LENGTH(ram));
-  PROVIDE(_heap_start = _stack);
-  PROVIDE(_heap_size = _memory_end - _stack);
+  PROVIDE(HEAP_START = _stack);
+  PROVIDE(HEAP_SIZE = _memory_end - _stack);
 }
 
