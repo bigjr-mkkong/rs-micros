@@ -2,12 +2,14 @@
 #![feature(panic_info_message, asm)]
 
 extern "C" {
-    static HEAP_START: u8;
-    static HEAP_SIZE: u8;
+    static mut HEAP_START: u8;
+    static mut HEAP_END: u8;
+    static mut VIRTIO_START: u8;
+    static mut VIRTIO_END: u8;
 }
 
 use core::arch::asm;
-use core::mem::MaybeUninit;
+use core::ptr;
 
 #[macro_export]
 macro_rules! print
@@ -73,11 +75,12 @@ fn kmain(){
     println!("\nHello world");
 
     let mut sys_zones = zone::system_zones::new();
-
     unsafe{
-        let begin_ref: *const u8 = &HEAP_START as *const u8;
-        let size_ref: *const u8 = &HEAP_SIZE as *const u8;
-        sys_zones.add_newzone(begin_ref as usize, size_ref as usize, zone::zone_type::ZONE_NORMAL);
+        sys_zones.add_newzone(ptr::addr_of_mut!(HEAP_START)as *mut u8,
+            ptr::addr_of_mut!(HEAP_END) as *mut u8, zone::zone_type::ZONE_NORMAL);
+
+        sys_zones.add_newzone(ptr::addr_of_mut!(VIRTIO_START)as *mut u8,
+            ptr::addr_of_mut!(VIRTIO_END) as *mut u8, zone::zone_type::ZONE_VIRTIO);
         sys_zones.print_all();
     }
 

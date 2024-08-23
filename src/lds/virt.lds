@@ -45,6 +45,8 @@ SECTIONS
   PROVIDE(_stack = _bss_end + 0x80000);
   PROVIDE(_memory_end = ORIGIN(ram) + LENGTH(ram));
   PROVIDE(HEAP_START = _stack);
-  PROVIDE(HEAP_SIZE = _memory_end - _stack);
+  PROVIDE(HEAP_END = _memory_end);
+  PROVIDE(VIRTIO_START = 0x10001000);
+  PROVIDE(VIRTIO_END = VIRTIO_START + 0x1000);
 }
 

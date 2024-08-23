@@ -24,7 +24,7 @@ _start:
 2:
 	la		sp, _stack
     #set mstatus
-	li		t0, (0b11 << 11) # | (1 << 7) | (1 << 3)
+	li		t0, (0b11 << 11) | (1 << 13)# | (1 << 3)
 	csrw	mstatus, t0
     #set mepc
 	la		t1, kmain

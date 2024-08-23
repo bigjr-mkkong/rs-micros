@@ -3,8 +3,10 @@
 #| |_| | | |___  | |___ 
 # \____|  \____|  \____|
 
-CC=riscv64-linux-gnu-g++
-OBJDUMP=riscv64-linux-gnu-objdump
+PREFIX=riscv64-linux-gnu-
+
+CC=$(PREFIX)g++
+OBJDUMP=$(PREFIX)objdump
 
 CFLAGS=-Wall -Wextra -pedantic -Wextra -O0 -std=c++17 -g
 CFLAGS+=-static -ffreestanding -nostdlib -fno-rtti -fno-exceptions
