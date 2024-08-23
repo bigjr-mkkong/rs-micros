@@ -79,7 +79,7 @@ fn kmain(){
 
     let mut sys_zones = zone::system_zones::new();
 
-    let allocator = page::byte_allocator::new();
+    let allocator = page::byte_allocator::default();
 
     unsafe{
         sys_zones.add_newzone(ptr::addr_of_mut!(HEAP_START)as *mut u8,
