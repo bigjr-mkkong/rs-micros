@@ -26,29 +26,40 @@ impl zone_type{
     }
 }
 
+pub trait page_allocator{
+    fn allocator_init(&mut self, zone_start: *mut u8, zone_end: *mut u8, zone_size: usize);
+    fn alloc_pages(&mut self, pg_cnt: usize) -> Option<*mut u8>;
+    fn free_pages(&mut self, addr: *mut u8);
+}
+
 #[derive(Clone, Copy)]
-pub struct mem_zone{
+pub struct mem_zone<A: page_allocator>{
     begin_addr: *mut u8,
     end_addr: *mut u8,
     zone_size: usize,
     types: zone_type,
+    pg_allocator: A
 }
 
-impl mem_zone{
+impl<A: page_allocator + Default> mem_zone<A>{
     pub fn new() -> Self{
         mem_zone{
             begin_addr: 0 as *mut u8,
             end_addr: 0 as *mut u8,
             zone_size: 0,
-            types: zone_type::ZONE_UNDEF
+            types: zone_type::ZONE_UNDEF,
+            pg_allocator: A::default()
         }
     }
 
-    pub fn init(&mut self, _start: *mut u8, _end: *mut u8, _type: zone_type){
+    pub fn init(&mut self, _start: *mut u8, _end: *mut u8, _type: zone_type, allocator: A){
         self.begin_addr = _start;
         self.end_addr = _end;
         self.zone_size = (unsafe{_end.offset_from(_start)}) as usize;
         self.types = _type;
+        self.pg_allocator = allocator;
+
+        self.pg_allocator.allocator_init(self.begin_addr, self.end_addr, self.zone_size);
     }
 
     pub fn print_all(&self) {
@@ -58,14 +69,22 @@ impl mem_zone{
             self.zone_size,
             self.types.as_str());
     }
+
+    pub fn alloc_pages(&mut self, pg_cnt: usize) -> Option<*mut u8> {
+        self.pg_allocator.alloc_pages(pg_cnt)
+    }
+
+    pub fn free_pages(&mut self, addr: *mut u8) {
+        self.pg_allocator.free_pages(addr)
+    }
 }
 
-pub struct system_zones{
+pub struct system_zones<A: page_allocator>{
     next_zone: usize,
-    zones: [mem_zone; zone_cnt]
+    zones: [mem_zone<A>; zone_cnt]
 }
 
-impl system_zones{
+impl<A: page_allocator + core::default::Default + core::marker::Copy> system_zones<A>{
     pub fn new() -> Self{
         system_zones{
             next_zone: 0,
@@ -73,8 +92,8 @@ impl system_zones{
         }
     }
 
-    pub fn add_newzone(&mut self, zone_begin: *mut u8, zone_end:*mut u8, ztype:zone_type) {
-        self.zones[self.next_zone].init(zone_begin, zone_end, ztype);
+    pub fn add_newzone(&mut self, zone_begin: *mut u8, zone_end:*mut u8, ztype:zone_type, alloc: A) {
+        self.zones[self.next_zone].init(zone_begin, zone_end, ztype, alloc);
         self.next_zone += 1;
     }
 
@@ -84,7 +103,7 @@ impl system_zones{
         }
     }
 
-    pub fn get_from_type(&mut self, target_type: zone_type) -> Option<&mut mem_zone>{
+    pub fn get_from_type(&mut self, target_type: zone_type) -> Option<&mut mem_zone<A>>{
         for z in self.zones.iter_mut(){
             if let target_type = z.types{
                 return Some(z);

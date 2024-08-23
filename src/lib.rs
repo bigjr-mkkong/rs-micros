@@ -75,13 +75,23 @@ fn kmain(){
     println!("\nHello world");
 
     let mut sys_zones = zone::system_zones::new();
+
+    let allocator = page::byte_allocator::new();
+
     unsafe{
         sys_zones.add_newzone(ptr::addr_of_mut!(HEAP_START)as *mut u8,
-            ptr::addr_of_mut!(HEAP_END) as *mut u8, zone::zone_type::ZONE_NORMAL);
+            ptr::addr_of_mut!(HEAP_END) as *mut u8, zone::zone_type::ZONE_NORMAL, allocator);
 
-        sys_zones.add_newzone(ptr::addr_of_mut!(VIRTIO_START)as *mut u8,
-            ptr::addr_of_mut!(VIRTIO_END) as *mut u8, zone::zone_type::ZONE_VIRTIO);
+        // sys_zones.add_newzone(ptr::addr_of_mut!(VIRTIO_START)as *mut u8,
+        //     ptr::addr_of_mut!(VIRTIO_END) as *mut u8, zone::zone_type::ZONE_VIRTIO);
         sys_zones.print_all();
+    }
+
+    let t_zone = sys_zones.get_from_type(zone::zone_type::ZONE_NORMAL);
+    if let Some(normal_zone) = t_zone{
+        let _ = normal_zone.alloc_pages(1);
+    } else{
+        println!("Not a valid memory zone");
     }
 
     loop{
@@ -97,3 +107,4 @@ fn kmain(){
 
 pub mod uart;
 pub mod zone;
+pub mod page;
