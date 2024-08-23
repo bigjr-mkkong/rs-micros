@@ -1,14 +1,14 @@
 use core::mem;
 use core::array;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum zone_type{
     ZONE_UNDEF,
     ZONE_NORMAL,
     ZONE_VIRTIO
 }
 
-const zone_cnt:usize = 10;
+const ZONE_CNT:usize = 10;
 
 impl zone_type{
     pub fn as_str(&self) -> &str{
@@ -81,14 +81,14 @@ impl<A: page_allocator + Default> mem_zone<A>{
 
 pub struct system_zones<A: page_allocator>{
     next_zone: usize,
-    zones: [mem_zone<A>; zone_cnt]
+    zones: [mem_zone<A>; ZONE_CNT]
 }
 
 impl<A: page_allocator + core::default::Default + core::marker::Copy> system_zones<A>{
     pub fn new() -> Self{
         system_zones{
             next_zone: 0,
-            zones: [mem_zone::new(); zone_cnt]
+            zones: [mem_zone::new(); ZONE_CNT]
         }
     }
 
@@ -104,8 +104,12 @@ impl<A: page_allocator + core::default::Default + core::marker::Copy> system_zon
     }
 
     pub fn get_from_type(&mut self, target_type: zone_type) -> Option<&mut mem_zone<A>>{
+        if let zone_type::ZONE_UNDEF = target_type {
+            return None;
+        }
+
         for z in self.zones.iter_mut(){
-            if let target_type = z.types{
+            if target_type == z.types{
                 return Some(z);
             }
         }

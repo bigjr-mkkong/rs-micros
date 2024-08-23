@@ -1,5 +1,8 @@
 #![no_std]
-#![feature(panic_info_message, asm)]
+#![feature(panic_info_message)]
+
+#![allow(unused)]
+#![allow(non_camel_case_types)]
 
 extern "C" {
     static mut HEAP_START: u8;
@@ -69,8 +72,8 @@ fn abort() -> ! {
 #[no_mangle]
 extern "C"
 fn kmain(){
-    let mut UART = uart::Uart::new(0x1000_0000);
-    UART.init();
+    let mut uart = uart::Uart::new(0x1000_0000);
+    uart.init();
 
     println!("\nHello world");
 
@@ -95,7 +98,7 @@ fn kmain(){
     }
 
     loop{
-        if let Some(c) = UART.get() {
+        if let Some(c) = uart.get() {
             println!("{}", c as char);
         }
         unsafe{
@@ -103,7 +106,6 @@ fn kmain(){
         }
     }
 }
-
 
 pub mod uart;
 pub mod zone;
