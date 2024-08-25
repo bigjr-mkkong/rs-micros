@@ -19,13 +19,13 @@ macro_rules! aligl_4k{
     };
 }
 
-enum page_flag{
+enum PageFlags{
     PF_FREE = (1 << 0),
     PF_TAKEN = (1 << 1)
 }
 
 struct PageMark{
-    flags: u8
+    flags: PageFlags
 }
 
 struct PageRec{
@@ -48,7 +48,7 @@ pub struct naive_allocator{
     mem_begin: *const u8,
     mem_end: *const u8,
     rec_begin: *mut u8,
-    rec_size: usize
+    rec_size: usize,
 }
 
 impl Default for naive_allocator{
@@ -70,10 +70,13 @@ impl Default for naive_allocator{
 impl zone::page_allocator for naive_allocator{
     fn allocator_init(&mut self, zone_start: *mut u8, zone_end: *mut u8, zone_size: usize) -> Result<(), KError>{
 
-        //Pretty wild, but lets keep this since this is a NAIVE allocator
+        //Pretty wild, but lets keep this since this is a **NAIVE** allocator
         if zone_size < 3 * PAGE_SIZE { 
             return Err(KError::new(KErrorType::ENOMEM));
         }
+
+        let pmark_sz = mem::size_of::<PageMark>();
+        let prec_sz = mem::size_of::<PageRec>();
 
         self.zone_begin = zone_start;
         self.zone_end = zone_end;
@@ -82,11 +85,26 @@ impl zone::page_allocator for naive_allocator{
         self.map_begin = aligh_4k!(zone_start) as *mut u8;
 
         self.tot_page = unsafe{self.mem_end.offset_from(self.map_begin) as usize / PAGE_SIZE};
-        self.map_size = aligh_4k!(self.tot_page * mem::size_of::<PageMark>());
+        self.map_size = aligh_4k!(self.tot_page * pmark_sz);
         self.rec_begin = unsafe{self.map_begin.add(self.map_size)};
-        self.rec_size = aligh_4k!(self.tot_page * mem::size_of::<PageRec>());
+        self.rec_size = aligh_4k!(self.tot_page * prec_sz);
         self.mem_begin = unsafe{self.rec_begin.add(self.rec_size) as *const u8};
         self.tot_page = unsafe{self.mem_end.offset_from(self.mem_begin) as usize / PAGE_SIZE};
+
+
+        let map_elecnt = self.map_size / pmark_sz;
+        let map_eleptr = self.map_begin as *mut PageMark;
+
+
+        for i in 0..map_elecnt{
+            unsafe{
+                map_eleptr.add(i).write(
+                    PageMark{
+                        flags: PageFlags::PF_FREE
+                    }
+                )
+            }
+        }
 
         self.print_info();
 

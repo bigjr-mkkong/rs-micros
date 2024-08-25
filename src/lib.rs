@@ -102,8 +102,8 @@ fn kmain() -> Result<(), KError> {
         sys_zones.add_newzone(ptr::addr_of_mut!(HEAP_START)as *mut u8,
             ptr::addr_of_mut!(HEAP_END) as *mut u8, zone_type::ZONE_NORMAL, allocator)?;
 
-        sys_zones.add_newzone(ptr::addr_of_mut!(VIRTIO_START)as *mut u8,
-            ptr::addr_of_mut!(VIRTIO_END) as *mut u8, zone_type::ZONE_VIRTIO, allocator)?;
+        // sys_zones.add_newzone(ptr::addr_of_mut!(VIRTIO_START)as *mut u8,
+        //     ptr::addr_of_mut!(VIRTIO_END) as *mut u8, zone_type::ZONE_VIRTIO, allocator)?;
         sys_zones.print_all();
     }
 
