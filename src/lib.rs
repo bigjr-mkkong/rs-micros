@@ -13,6 +13,9 @@ extern "C" {
 
 use core::arch::asm;
 use core::ptr;
+use error::{KError, KErrorType};
+use zone::zone_type;
+
 
 #[macro_export]
 macro_rules! print
@@ -71,7 +74,21 @@ fn abort() -> ! {
 
 #[no_mangle]
 extern "C"
-fn kmain(){
+fn eh_func(){
+    let init_return = kmain();
+    if let Err(er_code) = init_return{
+        println!("{}", er_code);
+        println!("SYSTEM HALTING NOW");
+        loop{
+            unsafe{
+                asm!("nop");
+            }
+        }
+    }
+
+}
+
+fn kmain() -> Result<(), KError> {
     let mut uart = uart::Uart::new(0x1000_0000);
     uart.init();
 
@@ -79,20 +96,20 @@ fn kmain(){
 
     let mut sys_zones = zone::system_zones::new();
 
-    let allocator = page::byte_allocator::default();
+    let allocator = page::naive_allocator::default();
 
     unsafe{
         sys_zones.add_newzone(ptr::addr_of_mut!(HEAP_START)as *mut u8,
-            ptr::addr_of_mut!(HEAP_END) as *mut u8, zone::zone_type::ZONE_NORMAL, allocator);
+            ptr::addr_of_mut!(HEAP_END) as *mut u8, zone_type::ZONE_NORMAL, allocator)?;
 
-        // sys_zones.add_newzone(ptr::addr_of_mut!(VIRTIO_START)as *mut u8,
-        //     ptr::addr_of_mut!(VIRTIO_END) as *mut u8, zone::zone_type::ZONE_VIRTIO);
+        sys_zones.add_newzone(ptr::addr_of_mut!(VIRTIO_START)as *mut u8,
+            ptr::addr_of_mut!(VIRTIO_END) as *mut u8, zone_type::ZONE_VIRTIO, allocator)?;
         sys_zones.print_all();
     }
 
-    let t_zone = sys_zones.get_from_type(zone::zone_type::ZONE_NORMAL);
+    let t_zone = sys_zones.get_from_type(zone_type::ZONE_NORMAL);
     if let Some(normal_zone) = t_zone{
-        let _ = normal_zone.alloc_pages(1);
+        normal_zone.alloc_pages(1);
     } else{
         println!("Not a valid memory zone");
     }
@@ -105,8 +122,10 @@ fn kmain(){
             asm!("nop");
         }
     }
+    Ok(())
 }
 
 pub mod uart;
 pub mod zone;
+pub mod error;
 pub mod page;

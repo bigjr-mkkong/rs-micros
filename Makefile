@@ -7,6 +7,7 @@ PREFIX=riscv64-linux-gnu-
 
 CC=$(PREFIX)g++
 OBJDUMP=$(PREFIX)objdump
+OBJCOPY=$(PREFIX)objcopy
 
 CFLAGS=-Wall -Wextra -pedantic -Wextra -O0 -std=c++17 -g
 CFLAGS+=-static -ffreestanding -nostdlib -fno-rtti -fno-exceptions
@@ -20,6 +21,8 @@ LIBS=-L$(RUST_TARGET)
 SOURCES_ASM=$(wildcard src/asm/*.S)
 LIB= -lgcc -lrs_micros
 OUT=os.elf
+
+BS_OUT=os.bin
 
 # / _ \  | ____| |  \/  | | | | |
 #| | | | |  _|   | |\/| | | | | |
@@ -46,7 +49,7 @@ debug: all dump
 	$(QEMU) -machine $(MACH) -cpu $(CPU) -smp $(CPUS) -m $(MEM)  -nographic -serial mon:stdio -bios none -kernel $(OUT) -drive if=none,format=raw,file=$(DRIVE),id=foo -device virtio-blk-device,scsi=off,drive=foo -s -S
 
 bitstream: all
-	riscv64-linux-gnu-objcopy -I elf64-littleriscv -O binary os.elf os.bin
+	$(OBJCOPY) -I elf64-littleriscv -O binary $(OUT) $(BS_OUT)
 
 dump: all
 	$(OBJDUMP) -D $(OUT) > dump

@@ -27,7 +27,7 @@ _start:
 	li		t0, (0b11 << 11) | (1 << 13)# | (1 << 3)
 	csrw	mstatus, t0
     #set mepc
-	la		t1, kmain
+	la		t1, eh_func
 	csrw	mepc, t1
     #set mtvec
 	la		t2, asm_trap_vector

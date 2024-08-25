@@ -1,6 +1,8 @@
 use core::mem;
 use core::array;
 
+use crate::error::{KError, KErrorType};
+
 #[derive(Clone, Copy, PartialEq)]
 pub enum zone_type{
     ZONE_UNDEF,
@@ -27,7 +29,7 @@ impl zone_type{
 }
 
 pub trait page_allocator{
-    fn allocator_init(&mut self, zone_start: *mut u8, zone_end: *mut u8, zone_size: usize);
+    fn allocator_init(&mut self, zone_start: *mut u8, zone_end: *mut u8, zone_size: usize) -> Result<(), KError>;
     fn alloc_pages(&mut self, pg_cnt: usize) -> Option<*mut u8>;
     fn free_pages(&mut self, addr: *mut u8);
 }
@@ -52,18 +54,20 @@ impl<A: page_allocator + Default> mem_zone<A>{
         }
     }
 
-    pub fn init(&mut self, _start: *mut u8, _end: *mut u8, _type: zone_type, allocator: A){
+    pub fn init(&mut self, _start: *mut u8, _end: *mut u8, _type: zone_type, allocator: A) -> Result<(), KError>{
         self.begin_addr = _start;
         self.end_addr = _end;
         self.zone_size = (unsafe{_end.offset_from(_start)}) as usize;
         self.types = _type;
         self.pg_allocator = allocator;
 
-        self.pg_allocator.allocator_init(self.begin_addr, self.end_addr, self.zone_size);
+        self.pg_allocator.allocator_init(self.begin_addr, self.end_addr, self.zone_size)?;
+
+        Ok(())
     }
 
     pub fn print_all(&self) {
-        println!("[ZONE INFO] Begin: {} -> End: {}  Size: {}  Type: {:#?}",
+        println!("[ZONE INFO] Begin: {:#x} -> End: {:#x}  Size: {:#x}  Type: {:#?}",
             self.begin_addr as usize,
             self.end_addr as usize,
             self.zone_size,
@@ -92,9 +96,10 @@ impl<A: page_allocator + core::default::Default + core::marker::Copy> system_zon
         }
     }
 
-    pub fn add_newzone(&mut self, zone_begin: *mut u8, zone_end:*mut u8, ztype:zone_type, alloc: A) {
-        self.zones[self.next_zone].init(zone_begin, zone_end, ztype, alloc);
+    pub fn add_newzone(&mut self, zone_begin: *mut u8, zone_end:*mut u8, ztype:zone_type, alloc: A) -> Result<(), KError> {
+        self.zones[self.next_zone].init(zone_begin, zone_end, ztype, alloc)?;
         self.next_zone += 1;
+        Ok(())
     }
 
     pub fn print_all(&self) {

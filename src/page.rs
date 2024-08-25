@@ -1,13 +1,21 @@
-use crate::zone;
 use core::ptr;
 use core::mem;
 use core::array;
 
+use crate::zone;
+use crate::error::{KError, KErrorType};
+
 pub const PAGE_SIZE:usize = 4096;
 
-macro_rules! aligh_up_PGSIZE{
+macro_rules! aligh_4k{
     ($n:expr) => {
-        ($n + 4096 - 1) & !(4096 - 1)
+        ($n as usize + 4096 - 1) & !(4096 - 1)
+    };
+}
+
+macro_rules! aligl_4k{
+    ($n:expr) => {
+        ($n as usize) & !(4096 - 1)
     };
 }
 
@@ -27,8 +35,11 @@ struct PageRec{
 }
 
 
+/*
+ * naive_allocator needs at least 4 Pages memory to works
+ */
 #[derive(Clone, Copy)]
-pub struct byte_allocator{
+pub struct naive_allocator{
     tot_page: usize,
     zone_begin: *mut u8,
     zone_end: *mut u8,
@@ -40,36 +51,46 @@ pub struct byte_allocator{
     rec_size: usize
 }
 
-impl Default for byte_allocator{
+impl Default for naive_allocator{
     fn default() -> Self{
-        byte_allocator{
+        naive_allocator{
             tot_page: 0,
             zone_begin: ptr::null_mut(),
             zone_end: ptr::null_mut(),
             map_begin: ptr::null_mut(),
             map_size: 0,
+            rec_begin: ptr::null_mut(),
+            rec_size: 0,
             mem_begin: ptr::null(),
             mem_end: ptr::null(),
-            rec_begin: ptr::null_mut(),
-            rec_size: 0
         }
     }
 }
 
-impl zone::page_allocator for byte_allocator{
-    fn allocator_init(&mut self, zone_start: *mut u8, zone_end: *mut u8, zone_size: usize) {
-        println!("Allocator initializing...");
-        self.tot_page = zone_size / PAGE_SIZE;
+impl zone::page_allocator for naive_allocator{
+    fn allocator_init(&mut self, zone_start: *mut u8, zone_end: *mut u8, zone_size: usize) -> Result<(), KError>{
+
+        //Pretty wild, but lets keep this since this is a NAIVE allocator
+        if zone_size < 3 * PAGE_SIZE { 
+            return Err(KError::new(KErrorType::ENOMEM));
+        }
+
         self.zone_begin = zone_start;
         self.zone_end = zone_end;
-        self.mem_end = zone_end as *const u8;
-        self.map_begin = zone_start;
-        self.map_size = aligh_up_PGSIZE!(self.tot_page * mem::size_of::<PageMark>());
-        unsafe{self.rec_begin = self.map_begin.add(self.map_size)};
-        self.rec_size = aligh_up_PGSIZE!(self.tot_page * mem::size_of::<PageRec>());
-        unsafe{self.mem_begin = self.rec_begin.add(self.rec_size) as *const u8};
-        unsafe{self.tot_page = self.mem_end.offset_from(self.mem_begin) as usize / PAGE_SIZE};
 
+        self.mem_end = aligl_4k!(zone_end) as *const u8;
+        self.map_begin = aligh_4k!(zone_start) as *mut u8;
+
+        self.tot_page = unsafe{self.mem_end.offset_from(self.map_begin) as usize / PAGE_SIZE};
+        self.map_size = aligh_4k!(self.tot_page * mem::size_of::<PageMark>());
+        self.rec_begin = unsafe{self.map_begin.add(self.map_size)};
+        self.rec_size = aligh_4k!(self.tot_page * mem::size_of::<PageRec>());
+        self.mem_begin = unsafe{self.rec_begin.add(self.rec_size) as *const u8};
+        self.tot_page = unsafe{self.mem_end.offset_from(self.mem_begin) as usize / PAGE_SIZE};
+
+        self.print_info();
+
+        Ok(())
     }
 
     fn alloc_pages(&mut self, pg_cnt: usize) -> Option<*mut u8> {
@@ -82,3 +103,16 @@ impl zone::page_allocator for byte_allocator{
     }
 }
 
+impl naive_allocator{
+    fn print_info(&self) {
+        println!("------------Allocator Info------------");
+        println!("Mapping Begin: {:#x} -- Size: {:#x}",
+                self.map_begin as usize, self.map_size);
+        println!("Record Begin: {:#x} -- Size: {:#x}",
+                self.rec_begin as usize, self.rec_size);
+        println!("Memory Begin: {:#x} -- Size: {:#x}",
+                self.mem_begin as usize, self.tot_page * 4096);
+        println!("------------Allocator Info Done------------");
+
+    }
+}
