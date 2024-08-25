@@ -98,14 +98,21 @@ fn kmain() -> Result<(), KError> {
 
     let allocator = page::naive_allocator::default();
 
+    let zone_start;
+    let zone_end;
+    /*
+     * Setting up new zone
+     */
     unsafe{
-        sys_zones.add_newzone(ptr::addr_of_mut!(HEAP_START)as *mut u8,
-            ptr::addr_of_mut!(HEAP_END) as *mut u8, zone_type::ZONE_NORMAL, allocator)?;
-
-        // sys_zones.add_newzone(ptr::addr_of_mut!(VIRTIO_START)as *mut u8,
-        //     ptr::addr_of_mut!(VIRTIO_END) as *mut u8, zone_type::ZONE_VIRTIO, allocator)?;
-        sys_zones.print_all();
+        zone_start = ptr::addr_of_mut!(HEAP_START) as *mut u8;
+        zone_end = ptr::addr_of_mut!(HEAP_END) as *mut u8;
     }
+    sys_zones.add_newzone(zone_start, zone_end, zone_type::ZONE_NORMAL, allocator)?;
+    
+
+
+
+    sys_zones.print_all();
 
     let t_zone = sys_zones.get_from_type(zone_type::ZONE_NORMAL);
     if let Some(normal_zone) = t_zone{
