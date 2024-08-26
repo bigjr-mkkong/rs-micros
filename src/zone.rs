@@ -30,8 +30,8 @@ impl zone_type{
 
 pub trait page_allocator{
     fn allocator_init(&mut self, zone_start: *mut u8, zone_end: *mut u8, zone_size: usize) -> Result<(), KError>;
-    fn alloc_pages(&mut self, pg_cnt: usize) -> Option<*mut u8>;
-    fn free_pages(&mut self, addr: *mut u8);
+    fn alloc_pages(&mut self, pg_cnt: usize) -> Result<*mut u8, KError>;
+    fn free_pages(&mut self, addr: *mut u8) -> Result<(), KError>;
 }
 
 #[derive(Clone, Copy)]
@@ -74,11 +74,11 @@ impl<A: page_allocator + Default> mem_zone<A>{
             self.types.as_str());
     }
 
-    pub fn alloc_pages(&mut self, pg_cnt: usize) -> Option<*mut u8> {
+    pub fn alloc_pages(&mut self, pg_cnt: usize) -> Result<*mut u8, KError> {
         self.pg_allocator.alloc_pages(pg_cnt)
     }
 
-    pub fn free_pages(&mut self, addr: *mut u8) {
+    pub fn free_pages(&mut self, addr: *mut u8) -> Result<(), KError> {
         self.pg_allocator.free_pages(addr)
     }
 }

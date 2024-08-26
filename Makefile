@@ -57,7 +57,5 @@ dump: all
 .PHONY: clean
 clean:
 	cargo clean
-	rm -f $(OUT)
-	rm dump
-	rm os.bin
+	rm -f $(OUT) dump os.bin hdd.dsk
 

@@ -115,8 +115,10 @@ fn kmain() -> Result<(), KError> {
     sys_zones.print_all();
 
     let t_zone = sys_zones.get_from_type(zone_type::ZONE_NORMAL);
+    let mut one_page_mem;
     if let Some(normal_zone) = t_zone{
-        normal_zone.alloc_pages(1);
+        one_page_mem = normal_zone.alloc_pages(1);
+
     } else{
         println!("Not a valid memory zone");
     }

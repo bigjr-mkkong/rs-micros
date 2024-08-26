@@ -1,5 +1,12 @@
 use core::fmt;
 
+#[macro_export]
+macro_rules! new_kerror{
+    ($er_type:expr) => {
+        KError::new($er_type, file!(), core::module_path!(), line!())
+    }
+}
+
 pub enum KErrorType{
     EFAULT,
     EINVAL,
@@ -14,12 +21,15 @@ pub struct KError{
 }
 
 impl KError{
-    pub fn new(_er_type: KErrorType) ->Self{
+    pub fn new(_er_type: KErrorType, 
+                _er_fname: &'static str,
+                _er_func: &'static str,
+                _er_line: u32) ->Self{
         KError{
             er_type: _er_type,
-            er_fname: file!(),
-            er_func: core::any::type_name::<fn()>(),
-            er_line: line!()
+            er_fname: _er_fname,
+            er_func: _er_func,
+            er_line: _er_line
         }
     }
 }
