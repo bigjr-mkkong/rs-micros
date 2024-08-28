@@ -1,5 +1,4 @@
 #![no_std]
-#![feature(panic_info_message)]
 
 #![allow(unused)]
 #![allow(non_camel_case_types)]
@@ -53,7 +52,7 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
         println!("line {}, file {}: {}",
             p.line(),
             p.file(),
-            info.message().unwrap());
+            info.message());
     }else{
         println!("PanicInfo not available yet");
     }
