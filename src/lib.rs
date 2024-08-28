@@ -88,6 +88,11 @@ fn eh_func(){
 
 }
 
+//   ____ _     ___  ____    _    _      __     ___    ____  ____  
+//  / ___| |   / _ \| __ )  / \  | |     \ \   / / \  |  _ \/ ___| 
+// | |  _| |  | | | |  _ \ / _ \ | |      \ \ / / _ \ | |_) \___ \ 
+// | |_| | |__| |_| | |_) / ___ \| |___    \ V / ___ \|  _ < ___) |
+//  \____|_____\___/|____/_/   \_\_____|    \_/_/   \_\_| \_\____/ 
 const zone_defval:Mutex<zone::mem_zone> = spin::Mutex::new(zone::mem_zone::new());
 static SYS_ZONES: [spin::Mutex<zone::mem_zone>; 3] = [
     zone_defval; zone_type::type_cnt()
