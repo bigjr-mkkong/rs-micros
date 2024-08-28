@@ -14,8 +14,8 @@ extern "C" {
 use core::arch::asm;
 use core::ptr;
 use error::{KError, KErrorType};
-use zone::zone_type;
-
+use zone::{zone_type, kmalloc_page, kfree_page};
+use spin::RwLock;
 
 #[macro_export]
 macro_rules! print
@@ -88,15 +88,22 @@ fn eh_func(){
 
 }
 
+static sys_zone: [spin::Mutex<zone::mem_zone>; 3] = [
+    spin::Mutex::new(zone::mem_zone::new()),
+    spin::Mutex::new(zone::mem_zone::new()),
+    spin::Mutex::new(zone::mem_zone::new()),
+];
+
 fn kmain() -> Result<(), KError> {
     let mut uart = uart::Uart::new(0x1000_0000);
     uart.init();
 
     println!("\nHello world");
 
-    let mut sys_zones = zone::system_zones::new();
+    // let mut sys_zones = zone::system_zones::new();
 
-    let allocator = page::naive_allocator::default();
+    // let allocator = page::naive_allocator::default();
+    // let null_allocator = page::empty_allocator::new();
 
     let zone_start;
     let zone_end;
@@ -107,21 +114,14 @@ fn kmain() -> Result<(), KError> {
         zone_start = ptr::addr_of_mut!(HEAP_START) as *mut u8;
         zone_end = ptr::addr_of_mut!(HEAP_END) as *mut u8;
     }
-    sys_zones.add_newzone(zone_start, zone_end, zone_type::ZONE_NORMAL, allocator)?;
-    
+    sys_zone[zone_type::ZONE_NORMAL.val()].lock().init(zone_start, zone_end, zone_type::ZONE_NORMAL,
+        zone::AllocatorSelector::NaiveAllocator)?;
+    sys_zone[zone_type::ZONE_UNDEF.val()].lock().init(0 as *mut u8, 0 as *mut u8, zone_type::ZONE_UNDEF,
+        zone::AllocatorSelector::EmptyAllocator)?;
 
-
-
-    sys_zones.print_all();
-
-    let t_zone = sys_zones.get_from_type(zone_type::ZONE_NORMAL);
-    let mut one_page_mem;
-    if let Some(normal_zone) = t_zone{
-        one_page_mem = normal_zone.alloc_pages(1);
-
-    } else{
-        println!("Not a valid memory zone");
-    }
+    let pg = kmalloc_page(zone_type::ZONE_NORMAL, 1)?;
+    println!("New page:{:#x}", pg as usize);
+    kfree_page(zone_type::ZONE_NORMAL, pg)?;
 
     loop{
         if let Some(c) = uart.get() {
