@@ -3,7 +3,9 @@ use core::mem;
 use core::array;
 
 use crate::zone;
-use crate::sys_uart;
+use crate::zone::page_allocator;
+use crate::SYS_UART;
+// use crate::sys_uart;
 
 use crate::error::{KError, KErrorType};
 use crate::new_kerror;
@@ -42,7 +44,7 @@ struct PageRec{
 /*
  * naive_allocator needs at least 4 Pages memory to works
  */
-#[derive(Clone, Copy)]
+#[derive(Default, Clone, Copy)]
 pub struct naive_allocator{
     tot_page: usize,
     zone_begin: usize,
@@ -51,30 +53,15 @@ pub struct naive_allocator{
     map_size: usize,
     mem_begin: usize,
     mem_end: usize,
-    // rec_begin: *mut PageRec,
     rec_begin: usize,
     rec_size: usize,
 }
 
 
-impl naive_allocator{
-    pub const fn new() -> Self{
-        naive_allocator{
-            tot_page: 0,
-            zone_begin: 0,
-            zone_end: 0,
-            map_begin: 0,
-            map_size: 0,
-            rec_begin: 0,
-            rec_size: 0,
-            mem_begin: 0,
-            mem_end: 0,
-        }
-    }
-    pub fn allocator_init(&mut self, zone_start: usize, zone_end: usize, zone_size: usize) -> Result<(), KError>{
-
+impl page_allocator for naive_allocator{
+    fn allocator_init(&mut self, zone_start: usize, zone_end: usize, zone_size: usize) -> Result<(), KError>{
         //Pretty wild, but lets keep this since this is a **NAIVE** allocator
-        if zone_size < 3 * PAGE_SIZE { 
+        if zone_size < 3 * PAGE_SIZE {
             return Err(new_kerror!(KErrorType::ENOMEM));
         }
 
@@ -133,7 +120,7 @@ impl naive_allocator{
         Ok(())
     }
 
-    pub fn alloc_pages(&mut self, pg_cnt: usize) -> Result<*mut u8, KError> {
+    fn alloc_pages(&mut self, pg_cnt: usize) -> Result<*mut u8, KError> {
         println!("Start allocate {} page(s)", pg_cnt);
         let mut alloc_addr;
         for i in 0..self.tot_page{
@@ -154,11 +141,11 @@ impl naive_allocator{
         }
 
         Err(new_kerror!(KErrorType::ENOMEM))
-        
+
 
     }
 
-    pub fn free_pages(&mut self, addr: *mut u8) -> Result<(), KError> {
+    fn free_pages(&mut self, addr: *mut u8) -> Result<(), KError> {
         println!("Start reclaiming...");
         let mut rec_arr = unsafe{core::slice::from_raw_parts_mut(self.rec_begin as *mut PageRec, self.rec_size)};
 
@@ -175,6 +162,19 @@ impl naive_allocator{
 }
 
 impl naive_allocator{
+    pub const fn new() -> Self{
+        naive_allocator{
+            tot_page: 0,
+            zone_begin: 0,
+            zone_end: 0,
+            map_begin: 0,
+            map_size: 0,
+            rec_begin: 0,
+            rec_size: 0,
+            mem_begin: 0,
+            mem_end: 0,
+        }
+    }
     fn print_info(&self) {
         println!("------------Allocator Info------------");
         println!("Total Pages: {}", self.tot_page);
@@ -260,7 +260,6 @@ impl naive_allocator{
         let mut free_begin_pgnum: usize = 0;
         let mut free_pgnum: usize = 0;
         let mut found: bool = false;
-    
         let rawpt_recbegin = self.rec_begin as *mut PageRec;
 
         let rec_arr = unsafe{core::slice::from_raw_parts_mut(rawpt_recbegin, self.tot_page)};
@@ -280,6 +279,33 @@ impl naive_allocator{
         }else{
             return Err(new_kerror!(KErrorType::EFAULT));
         }
+    }
+
+}
+
+#[derive(Clone, Copy)]
+pub struct empty_allocator{
+    place_holder: usize
+}
+
+impl empty_allocator{
+    pub const fn new() -> Self{
+        empty_allocator{
+            place_holder: 0xdeadbeef
+        }
+    }
+}
+
+impl page_allocator for empty_allocator{
+    fn allocator_init(&mut self, zone_start: usize, zone_end: usize, zone_size: usize) -> Result<(), KError>{
+        println!("Placeholder Allocator Initializing");
+        Ok(())
+    }
+    fn alloc_pages(&mut self, pg_cnt: usize) -> Result<*mut u8, KError>{
+        Err(new_kerror!(KErrorType::ENOSYS))
+    }
+    fn free_pages(&mut self, addr: *mut u8) -> Result<(), KError>{
+        Err(new_kerror!(KErrorType::ENOSYS))
     }
 
 }

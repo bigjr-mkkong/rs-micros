@@ -1,24 +1,53 @@
 use core::mem;
 use core::array;
 
-use crate::sys_uart;
+use crate::SYS_UART;
+use crate::SYS_ZONES;
 use crate::error::{KError, KErrorType};
 use crate::new_kerror;
 
-#[derive(Clone, Copy, PartialEq)]
-pub enum zone_type{
-    ZONE_UNDEF = 0,
-    ZONE_NORMAL = 1,
-    ZONE_VIRTIO = 2
+use crate::page::{naive_allocator, empty_allocator};
+
+#[derive(Clone, Copy)]
+pub enum AllocatorSelector{
+    EmptyAllocator,
+    NaiveAllocator
 }
 
-impl zone_type{
-    pub fn val(&self) -> usize{
-        *self as usize
+#[derive(Clone, Copy)]
+pub enum Allocators{
+    EmptyAllocator(empty_allocator),
+    NaiveAllocator(naive_allocator)
+}
+
+impl page_allocator for Allocators{
+    fn allocator_init(&mut self, zone_start: usize, zone_end: usize, zone_size: usize) -> Result<(), KError>{
+        match self{
+            Allocators::EmptyAllocator(alloc) => alloc.allocator_init(zone_start, zone_end, zone_size),
+            Allocators::NaiveAllocator(alloc) => alloc.allocator_init(zone_start, zone_end, zone_size),
+        }
+    }
+
+    fn alloc_pages(&mut self, pg_cnt: usize) -> Result<*mut u8, KError>{
+        match self{
+            Allocators::EmptyAllocator(alloc) => alloc.alloc_pages(pg_cnt),
+            Allocators::NaiveAllocator(alloc) => alloc.alloc_pages(pg_cnt),
+        }
+    }
+    fn free_pages(&mut self, addr: *mut u8) -> Result<(), KError>{
+        match self{
+            Allocators::EmptyAllocator(alloc) => alloc.free_pages(addr),
+            Allocators::NaiveAllocator(alloc) => alloc.free_pages(addr),
+        }
     }
 }
 
-const ZONE_CNT:usize = 10;
+#[derive(Clone, Copy)]
+pub enum zone_type{
+    ZONE_UNDEF = (0),
+    ZONE_NORMAL = (1),
+    ZONE_VIRTIO = (2)
+}
 
 impl zone_type{
     pub fn as_str(&self) -> &str{
@@ -34,14 +63,31 @@ impl zone_type{
             }
         }
     }
+
+    pub fn val(&self) -> usize{
+        *self as usize
+    }
+
+    pub const fn type_cnt() -> usize{
+        3
+    }
+
+}
+
+pub trait page_allocator{
+    fn allocator_init(&mut self, zone_start: usize, zone_end: usize, zone_size: usize) -> Result<(), KError>;
+    fn alloc_pages(&mut self, pg_cnt: usize) -> Result<*mut u8, KError>;
+    fn free_pages(&mut self, addr: *mut u8) -> Result<(), KError>;
 }
 
 #[derive(Clone, Copy)]
 pub struct mem_zone{
-    pub begin_addr: usize,
-    pub end_addr: usize,
-    pub zone_size: usize,
-    pub types: zone_type,
+    begin_addr: usize,
+    end_addr: usize,
+    zone_size: usize,
+    types: zone_type,
+    // pg_allocator: Option<A>
+    pg_allocator: Option<Allocators>
 }
 
 impl mem_zone{
@@ -51,15 +97,23 @@ impl mem_zone{
             end_addr: 0,
             zone_size: 0,
             types: zone_type::ZONE_UNDEF,
+            pg_allocator: None
         }
     }
 
-    pub fn init(&mut self, _start: *mut u8, _end: *mut u8, _type: zone_type) -> Result<(), KError>{
+    pub fn init(&mut self, _start: *mut u8, _end: *mut u8, _type: zone_type, allocator: AllocatorSelector) -> Result<(), KError>{
+
         self.begin_addr = _start as usize;
         self.end_addr = _end as usize;
         self.zone_size = (unsafe{_end.offset_from(_start)}) as usize;
         self.types = _type;
+        let mut allocator = match allocator{
+            AllocatorSelector::EmptyAllocator => Allocators::EmptyAllocator(empty_allocator::new()),
+            AllocatorSelector::NaiveAllocator => Allocators::NaiveAllocator(naive_allocator::new())
+        };
+        allocator.allocator_init(_start as usize, _end as usize, self.zone_size)?;
 
+        self.pg_allocator = Some(allocator);
         Ok(())
     }
 
@@ -71,42 +125,27 @@ impl mem_zone{
             self.types.as_str());
     }
 
-}
-
-pub struct system_zones{
-    zone_cnt: usize,
-    zones: [mem_zone; ZONE_CNT]
-}
-
-impl system_zones{
-    pub const fn new() -> Self{
-        system_zones{
-            zone_cnt: 0,
-            zones: [mem_zone::new(); ZONE_CNT]
-        }
-    }
-
-    pub fn add_newzone(&mut self, zone_begin: *mut u8, zone_end:*mut u8, ztype:zone_type) -> Result<(), KError> {
-        self.zones[ztype.val()].init(zone_begin, zone_end, ztype)?;
-        self.zone_cnt += 1;
-        Ok(())
-    }
-
-    pub fn print_all(&self) {
-        for z in self.zones{
-            if let zone_type::ZONE_UNDEF = z.types{
-                continue;
-            }
-            
-            z.print_all();
-        }
-    }
-
-    pub fn get_from_type(&self, target_type: zone_type) -> Option<&mem_zone>{
-        if let zone_type::ZONE_UNDEF = self.zones[target_type.val()].types {
-            None
+    pub fn alloc_pages(&mut self, pg_cnt: usize) -> Result<*mut u8, KError> {
+        if let Some(mut alloc) = self.pg_allocator{
+            alloc.alloc_pages(pg_cnt)
         }else{
-            Some(&self.zones[target_type.val()])
+            Err(new_kerror!(KErrorType::ENOSYS))
         }
     }
+
+    pub fn free_pages(&mut self, addr: *mut u8) -> Result<(), KError> {
+        if let Some(mut alloc) = self.pg_allocator{
+            alloc.free_pages(addr)
+        }else{
+            Err(new_kerror!(KErrorType::ENOSYS))
+        }
+    }
+}
+
+pub fn kmalloc_page(ztype: zone_type, pg_cnt: usize) -> Result<*mut u8, KError>{
+    SYS_ZONES[ztype.val()].lock().alloc_pages(pg_cnt)
+}
+
+pub fn kfree_page(ztype: zone_type, addr: *mut u8) -> Result<(), KError> {
+    SYS_ZONES[ztype.val()].lock().free_pages(addr)
 }

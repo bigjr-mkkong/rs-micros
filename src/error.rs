@@ -1,4 +1,5 @@
 use core::fmt;
+use crate::SYS_UART;
 
 #[macro_export]
 macro_rules! new_kerror{
@@ -11,7 +12,7 @@ pub enum KErrorType{
     EFAULT,
     EINVAL,
     ENOMEM,
-    ENOSYS
+    ENOSYS,
 }
 
 pub struct KError{

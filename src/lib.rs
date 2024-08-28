@@ -14,27 +14,15 @@ extern "C" {
 use core::arch::asm;
 use core::ptr;
 use error::{KError, KErrorType};
-use zone::zone_type;
+use zone::{zone_type, kmalloc_page, kfree_page};
 use spin::{Mutex, RwLock};
-
-//   ____ _     ___  ____    _    _      __     ___    ____  ____  
-//  / ___| |   / _ \| __ )  / \  | |     \ \   / / \  |  _ \/ ___| 
-// | |  _| |  | | | |  _ \ / _ \ | |      \ \ / / _ \ | |_) \___ \ 
-// | |_| | |__| |_| | |_) / ___ \| |___    \ V / ___ \|  _ < ___) |
-//  \____|_____\___/|____/_/   \_\_____|    \_/_/   \_\_| \_\____/ 
-                                                                
-static sys_zones: RwLock<zone::system_zones> = RwLock::new(zone::system_zones::new());
-static sys_uart: Mutex<uart::Uart> = Mutex::new(uart::Uart::new(0x1000_0000));
-static nalloc: Mutex<page::naive_allocator> = Mutex::new(page::naive_allocator::new());
-
 
 #[macro_export]
 macro_rules! print
 {
     ($($args:tt)+) => ({
         use core::fmt::Write;
-        // let _ = write!(crate::uart::Uart::new(0x10000000), $($args)+);
-        let _ = write!(sys_uart.lock(), $($args)+);
+        let _ = write!(SYS_UART.lock(), $($args)+);
     });
 }
 
@@ -100,10 +88,21 @@ fn eh_func(){
 
 }
 
+const zone_defval:Mutex<zone::mem_zone> = spin::Mutex::new(zone::mem_zone::new());
+static SYS_ZONES: [spin::Mutex<zone::mem_zone>; 3] = [
+    zone_defval; zone_type::type_cnt()
+];
+static SYS_UART: Mutex<uart::Uart> = Mutex::new(uart::Uart::new(0x1000_0000));
+
 fn kmain() -> Result<(), KError> {
-    sys_uart.lock().init();
+    SYS_UART.lock().init();
 
     println!("\nHello world");
+
+    // let mut sys_zones = zone::system_zones::new();
+
+    // let allocator = page::naive_allocator::default();
+    // let null_allocator = page::empty_allocator::new();
 
     let zone_start;
     let zone_end;
@@ -114,25 +113,19 @@ fn kmain() -> Result<(), KError> {
         zone_start = ptr::addr_of_mut!(HEAP_START) as *mut u8;
         zone_end = ptr::addr_of_mut!(HEAP_END) as *mut u8;
     }
-    sys_zones.write().add_newzone(zone_start, zone_end, zone_type::ZONE_NORMAL)?;
-    
+    SYS_ZONES[zone_type::ZONE_NORMAL.val()].lock().init(zone_start, zone_end, zone_type::ZONE_NORMAL,
+        zone::AllocatorSelector::NaiveAllocator)?;
+    SYS_ZONES[zone_type::ZONE_UNDEF.val()].lock().init(0 as *mut u8, 0 as *mut u8, zone_type::ZONE_UNDEF,
+        zone::AllocatorSelector::EmptyAllocator)?;
 
-    /*
-     * Setting up physical page allocator
-     */
-    let binding = sys_zones.read();
-    let t_zone = binding.get_from_type(zone_type::ZONE_NORMAL);
-    if let Some(normal_zone) = t_zone{
-        normal_zone.print_all();
-        nalloc.lock().allocator_init(normal_zone.begin_addr, normal_zone.end_addr, normal_zone.zone_size);
-    } else{
-        return Err(new_kerror!(KErrorType::EFAULT));
-    }
+    let pg = kmalloc_page(zone_type::ZONE_NORMAL, 1)?;
+    println!("New page:{:#x}", pg as usize);
+    kfree_page(zone_type::ZONE_NORMAL, pg)?;
 
 
 
     loop{
-        let ch_ops = sys_uart.lock().get();
+        let ch_ops = SYS_UART.lock().get();
         match ch_ops {
             Some(ch) => {
                 println!("{}", ch as char);
