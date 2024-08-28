@@ -11,6 +11,7 @@ pub enum KErrorType{
     EFAULT,
     EINVAL,
     ENOMEM,
+    ENOSYS
 }
 
 pub struct KError{
@@ -39,7 +40,8 @@ impl fmt::Display for KError {
         let er_str = match self.er_type{
             KErrorType::EFAULT => "EFAULT",
             KErrorType::EINVAL => "EINVAL",
-            KErrorType::ENOMEM => "ENOMEM"
+            KErrorType::ENOMEM => "ENOMEM",
+            KErrorType::ENOSYS => "ENOSYS"
         };
 
         write!(

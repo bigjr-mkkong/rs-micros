@@ -3,6 +3,7 @@ use core::mem;
 use core::array;
 
 use crate::zone;
+use crate::sys_uart;
 
 use crate::error::{KError, KErrorType};
 use crate::new_kerror;
@@ -44,34 +45,33 @@ struct PageRec{
 #[derive(Clone, Copy)]
 pub struct naive_allocator{
     tot_page: usize,
-    zone_begin: *mut u8,
-    zone_end: *mut u8,
-    map_begin: *mut PageMark,
+    zone_begin: usize,
+    zone_end: usize,
+    map_begin: usize,
     map_size: usize,
-    mem_begin: *const u8,
-    mem_end: *const u8,
-    rec_begin: *mut PageRec,
+    mem_begin: usize,
+    mem_end: usize,
+    // rec_begin: *mut PageRec,
+    rec_begin: usize,
     rec_size: usize,
 }
 
-impl Default for naive_allocator{
-    fn default() -> Self{
+
+impl naive_allocator{
+    pub const fn new() -> Self{
         naive_allocator{
             tot_page: 0,
-            zone_begin: ptr::null_mut(),
-            zone_end: ptr::null_mut(),
-            map_begin: ptr::null_mut(),
+            zone_begin: 0,
+            zone_end: 0,
+            map_begin: 0,
             map_size: 0,
-            rec_begin: ptr::null_mut(),
+            rec_begin: 0,
             rec_size: 0,
-            mem_begin: ptr::null(),
-            mem_end: ptr::null(),
+            mem_begin: 0,
+            mem_end: 0,
         }
     }
-}
-
-impl zone::page_allocator for naive_allocator{
-    fn allocator_init(&mut self, zone_start: *mut u8, zone_end: *mut u8, zone_size: usize) -> Result<(), KError>{
+    pub fn allocator_init(&mut self, zone_start: usize, zone_end: usize, zone_size: usize) -> Result<(), KError>{
 
         //Pretty wild, but lets keep this since this is a **NAIVE** allocator
         if zone_size < 3 * PAGE_SIZE { 
@@ -84,22 +84,28 @@ impl zone::page_allocator for naive_allocator{
         self.zone_begin = zone_start;
         self.zone_end = zone_end;
 
-        self.mem_end = aligl_4k!(zone_end) as *const u8;
-        self.map_begin = aligh_4k!(zone_start) as *mut PageMark;
+        self.mem_end = aligl_4k!(zone_end);
+        self.map_begin = aligh_4k!(zone_start);
 
-        self.tot_page = unsafe{self.mem_end.offset_from(self.map_begin as *mut u8) as usize / PAGE_SIZE};
+
+        self.tot_page = (self.mem_end - self.map_begin) / PAGE_SIZE;
         self.map_size = aligh_4k!(self.tot_page * pmark_sz);
-        self.rec_begin = unsafe{self.map_begin.add(self.map_size) as *mut PageRec};
+        self.rec_begin = self.map_begin + self.map_size;
+
+
         self.rec_size = aligh_4k!(self.tot_page * prec_sz);
-        self.mem_begin = unsafe{self.rec_begin.add(self.rec_size) as *const u8};
-        self.tot_page = unsafe{self.mem_end.offset_from(self.mem_begin) as usize / PAGE_SIZE};
+        self.mem_begin = self.rec_begin + self.rec_size;
+        self.tot_page = (self.mem_end - self.mem_begin) / PAGE_SIZE;
 
 
         let map_elecnt = self.map_size / pmark_sz;
+        let rawpt_mapbegin = self.map_begin as *mut PageMark;
+        let rawpt_recbegin = self.rec_begin as *mut PageRec;
+        let rawpt_membegin = self.mem_begin as *const u8;
 
         for i in 0..map_elecnt{
             unsafe{
-                self.map_begin.add(i).write(
+                rawpt_mapbegin.add(i).write(
                     PageMark{
                         flags: PageFlags::PF_FREE
                     }
@@ -111,7 +117,7 @@ impl zone::page_allocator for naive_allocator{
 
         for i in 0..rec_elecnt{
             unsafe{
-                self.rec_begin.add(i).write(
+                rawpt_recbegin.add(i).write(
                     PageRec{
                         begin: 0 as *const u8,
                         pg_off: 0,
@@ -127,7 +133,7 @@ impl zone::page_allocator for naive_allocator{
         Ok(())
     }
 
-    fn alloc_pages(&mut self, pg_cnt: usize) -> Result<*mut u8, KError> {
+    pub fn alloc_pages(&mut self, pg_cnt: usize) -> Result<*mut u8, KError> {
         println!("Start allocate {} page(s)", pg_cnt);
         let mut alloc_addr;
         for i in 0..self.tot_page{
@@ -152,9 +158,9 @@ impl zone::page_allocator for naive_allocator{
 
     }
 
-    fn free_pages(&mut self, addr: *mut u8) -> Result<(), KError> {
+    pub fn free_pages(&mut self, addr: *mut u8) -> Result<(), KError> {
         println!("Start reclaiming...");
-        let mut rec_arr = unsafe{core::slice::from_raw_parts_mut(self.rec_begin, self.rec_size)};
+        let mut rec_arr = unsafe{core::slice::from_raw_parts_mut(self.rec_begin as *mut PageRec, self.rec_size)};
 
         let mut free_begin_pgnum: usize;
         let mut free_pgnum: usize;
@@ -171,20 +177,23 @@ impl zone::page_allocator for naive_allocator{
 impl naive_allocator{
     fn print_info(&self) {
         println!("------------Allocator Info------------");
+        println!("Total Pages: {}", self.tot_page);
         println!("Mapping Begin: {:#x} -- Size: {:#x}",
                 self.map_begin as usize, self.map_size);
         println!("Record Begin: {:#x} -- Size: {:#x}",
                 self.rec_begin as usize, self.rec_size);
         println!("Memory Begin: {:#x} -- Size: {:#x}",
                 self.mem_begin as usize, self.tot_page * 4096);
-        println!("------------Allocator Info Done------------");
+        println!("------------Allocator Info End------------");
     }
 
     fn map_first_fit_avail(&self, map_off: usize, thres_pg: usize) -> Result<bool, KError>{
         if map_off + thres_pg > self.tot_page {
             return Err(new_kerror!(KErrorType::ENOMEM));
         }
-        let map_arr = unsafe{core::slice::from_raw_parts(self.map_begin.add(map_off), self.tot_page)};
+        let rawpt_mapbegin = self.map_begin as *mut PageMark;
+
+        let map_arr = unsafe{core::slice::from_raw_parts(rawpt_mapbegin.add(map_off), self.tot_page)};
 
         for (reg_cnt, reg) in map_arr.iter().enumerate() {
             if let PageFlags::PF_TAKEN = reg.flags{
@@ -227,11 +236,12 @@ impl naive_allocator{
     fn rec_add(&mut self, map_off: usize, page_cnt: usize) -> Result<*const u8, KError>{
         let mut rec_arr;
         unsafe{
-            rec_arr = core::slice::from_raw_parts_mut(self.rec_begin, self.rec_size);
+            rec_arr = core::slice::from_raw_parts_mut(self.rec_begin as *mut PageRec, self.rec_size);
         }
 
+        let rawpt_membegin = self.mem_begin as *mut u8;
         for (rec_cnt, rec) in rec_arr.iter_mut().enumerate() {
-            let addr = self.mem_begin.wrapping_byte_offset((map_off * PAGE_SIZE) as isize);
+            let addr = rawpt_membegin.wrapping_byte_offset((map_off * PAGE_SIZE) as isize);
             if rec.inuse == false{
                 *rec = PageRec{
                     begin: addr,
@@ -250,7 +260,10 @@ impl naive_allocator{
         let mut free_begin_pgnum: usize = 0;
         let mut free_pgnum: usize = 0;
         let mut found: bool = false;
-        let rec_arr = unsafe{core::slice::from_raw_parts_mut(self.rec_begin, self.tot_page)};
+    
+        let rawpt_recbegin = self.rec_begin as *mut PageRec;
+
+        let rec_arr = unsafe{core::slice::from_raw_parts_mut(rawpt_recbegin, self.tot_page)};
         for (rec_cnt, rec) in rec_arr.iter_mut().enumerate() {
             if rec.begin == begin_addr{
                 free_begin_pgnum = rec.pg_off;

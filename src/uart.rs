@@ -1,5 +1,6 @@
 use core::convert::TryInto;
 use core::fmt::{Error, Write};
+use spin::Mutex;
 
 pub struct Uart{
     base_address: usize,
@@ -16,7 +17,7 @@ impl Write for Uart{
 }
 
 impl Uart{
-    pub fn new(base_address: usize) -> Self{
+    pub const fn new(base_address: usize) -> Self{
         Uart{
             base_address
         }
