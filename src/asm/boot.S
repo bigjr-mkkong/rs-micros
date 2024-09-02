@@ -41,29 +41,27 @@ _start:
 	mret
 
 3:
-    csrw pmpaddr0, zero
-    li t0, 7 | (1 << 3)
-    csrw pmpcfg0, t0
+    csrw    satp, a0
 
-  	li		t0, (1 << 8) | (1 << 5)
-  	csrw	sstatus, t0
- 
-   	la		t1, eh_func_kmain
-   	csrw	sepc, t1
-  	
- 	li		t2, (1 << 1) | (1 << 5) | (1 << 9)
- 	csrw	mideleg, t2
- 
- 	csrw	sie, t2
- 
- 	la		t3, asm_trap_vector
- 	csrw	stvec, t3
- 
- 	csrw	satp, a0
- 
- 	sfence.vma
- 
- 	sret
+    csrw    pmpaddr0, zero
+    li      t0, 7 | (1 << 3)
+    csrw    pmpcfg0, t0
+
+    la      a0, eh_func_kmain
+    csrw    mepc, a0
+
+    csrr    a1, mstatus
+    li      a2, ~(3 << 11)
+    and     a1, a1, a2
+    li      a2, (1 << 11)
+    or      a1, a1, a2
+    csrw    mstatus, a1
+
+#clear interrupt atm
+    li      a2, 0
+    csrw    mie, a2
+
+    mret
 
     
 4:
