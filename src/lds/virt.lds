@@ -42,11 +42,12 @@ SECTIONS
   }
 
   PROVIDE(_memory_start = ORIGIN(ram));
-  PROVIDE(_stack = _bss_end + 0x80000);
   PROVIDE(_memory_end = ORIGIN(ram) + LENGTH(ram));
-  PROVIDE(HEAP_START = _stack);
-  PROVIDE(HEAP_END = _memory_end);
-  PROVIDE(VIRTIO_START = 0x10001000);
-  PROVIDE(VIRTIO_END = VIRTIO_START + 0x1000);
+  PROVIDE(_stack_start = _bss_end + 0x80000);
+  PROVIDE(_stack_end = _bss_end );
+  PROVIDE(_heap_start = ALIGN((_stack_start + 0x1000), 4096));
+  PROVIDE(_heap_end = _memory_end);
+  PROVIDE(_virtio_start = 0x10000000);
+  PROVIDE(_virtio_end = _virtio_start + 0x1000);
 }
 

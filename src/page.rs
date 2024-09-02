@@ -12,12 +12,14 @@ use crate::new_kerror;
 
 pub const PAGE_SIZE:usize = 4096;
 
+#[macro_export]
 macro_rules! aligh_4k{
     ($n:expr) => {
         ($n as usize + 4096 - 1) & !(4096 - 1)
     };
 }
 
+#[macro_export]
 macro_rules! aligl_4k{
     ($n:expr) => {
         ($n as usize) & !(4096 - 1)
@@ -121,7 +123,7 @@ impl page_allocator for naive_allocator{
     }
 
     fn alloc_pages(&mut self, pg_cnt: usize) -> Result<*mut u8, KError> {
-        println!("Start allocate {} page(s)", pg_cnt);
+        // println!("Start allocate {} page(s)", pg_cnt);
         let mut alloc_addr;
         for i in 0..self.tot_page{
             match self.map_first_fit_avail(i, pg_cnt) {

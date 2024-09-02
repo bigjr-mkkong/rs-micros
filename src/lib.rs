@@ -4,10 +4,26 @@
 #![allow(non_camel_case_types)]
 
 extern "C" {
-    static mut HEAP_START: u8;
-    static mut HEAP_END: u8;
-    static mut VIRTIO_START: u8;
-    static mut VIRTIO_END: u8;
+    static _heap_start: u8;
+    static _heap_end: u8;
+
+    static _stack_start: u8;
+    static _stack_end: u8;
+
+    static _text_start: u8;
+    static _text_end: u8;
+
+    static _rodata_start: u8;
+    static _rodata_end: u8;
+
+    static _data_start: u8;
+    static _data_end: u8;
+
+    static _bss_start: u8;
+    static _bss_end: u8;
+
+    static _virtio_start: u8;
+    static _virtio_end: u8;
 }
 
 use core::arch::asm;
@@ -15,6 +31,7 @@ use core::ptr;
 use error::{KError, KErrorType};
 use zone::{zone_type, kmalloc_page, kfree_page};
 use spin::{Mutex, RwLock};
+use vm::{range_map, virt2phys};
 
 #[macro_export]
 macro_rules! print
@@ -47,7 +64,7 @@ extern "C" fn eh_personality() {}
 
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
-    print!("Aborting...");
+    print!("System Aborting...");
     if let Some(p) = info.location() {
         println!("line {}, file {}: {}",
             p.line(),
@@ -73,18 +90,34 @@ fn abort() -> ! {
 
 #[no_mangle]
 extern "C"
-fn eh_func(){
-    let init_return = kmain();
+fn eh_func_kinit() -> usize{
+    let init_return = kinit();
     if let Err(er_code) = init_return{
         println!("{}", er_code);
-        println!("SYSTEM HALTING NOW");
+        println!("kinit() Failed, System halting now...");
+        loop{
+            unsafe{
+                asm!("nop");
+            }
+        }
+    }else{
+        init_return.unwrap_or_default()
+    }
+}
+
+#[no_mangle]
+extern "C"
+fn eh_func_kmain(){
+    let main_return = kmain();
+    if let Err(er_code) = main_return{
+        println!("{}", er_code);
+        println!("kmain() Failed, System halting now...");
         loop{
             unsafe{
                 asm!("nop");
             }
         }
     }
-
 }
 
 //   ____ _     ___  ____    _    _      __     ___    ____  ____  
@@ -98,36 +131,87 @@ static SYS_ZONES: [spin::Mutex<zone::mem_zone>; 3] = [
 ];
 static SYS_UART: Mutex<uart::Uart> = Mutex::new(uart::Uart::new(0x1000_0000));
 
-fn kmain() -> Result<(), KError> {
+fn kinit() -> Result<usize, KError> {
     SYS_UART.lock().init();
 
     println!("\nHello world");
 
-    // let mut sys_zones = zone::system_zones::new();
-
-    // let allocator = page::naive_allocator::default();
-    // let null_allocator = page::empty_allocator::new();
-
-    let zone_start;
-    let zone_end;
     /*
      * Setting up new zone
      */
-    unsafe{
-        zone_start = ptr::addr_of_mut!(HEAP_START) as *mut u8;
-        zone_end = ptr::addr_of_mut!(HEAP_END) as *mut u8;
-    }
-    SYS_ZONES[zone_type::ZONE_NORMAL.val()].lock().init(zone_start, zone_end, zone_type::ZONE_NORMAL,
+    SYS_ZONES[zone_type::ZONE_NORMAL.val()].lock().init(
+            ptr::addr_of!(_heap_start),
+            ptr::addr_of!(_heap_end),
+            zone_type::ZONE_NORMAL,
         zone::AllocatorSelector::NaiveAllocator)?;
-    SYS_ZONES[zone_type::ZONE_UNDEF.val()].lock().init(0 as *mut u8, 0 as *mut u8, zone_type::ZONE_UNDEF,
+
+    SYS_ZONES[zone_type::ZONE_UNDEF.val()].lock().init(
+        0 as *const u8,
+        0 as *const u8,
+        zone_type::ZONE_UNDEF,
         zone::AllocatorSelector::EmptyAllocator)?;
 
-    let pg = kmalloc_page(zone_type::ZONE_NORMAL, 1)?;
-    println!("New page:{:#x}", pg as usize);
-    kfree_page(zone_type::ZONE_NORMAL, pg)?;
+    kmem::init()?;
 
+    let pageroot_ptr = kmem::get_page_table();
+    let mut pageroot = unsafe{pageroot_ptr.as_mut().unwrap()};
 
+    let kheap_begin = kmem::get_kheap_start();
+    let kheap_pgcnt = kmem::get_kheap_pgcnt();
 
+    range_map(pageroot,
+            aligl_4k!(ptr::addr_of!(_text_start) as usize),
+            aligh_4k!(ptr::addr_of!(_text_end) as usize),
+            vm::EntryBits::ReadExecute.val());
+
+    let usz_heap_start = ptr::addr_of!(_heap_start) as usize;
+    let usz_heap_end = usz_heap_start + SYS_ZONES[zone_type::ZONE_NORMAL.val()].lock().get_size()?;
+    range_map(pageroot,
+            usz_heap_start,
+            usz_heap_end,
+            vm::EntryBits::ReadWrite.val());
+
+    range_map(pageroot, 
+            kheap_begin as usize,
+            kheap_begin as usize + page::PAGE_SIZE * kheap_pgcnt,
+            vm::EntryBits::ReadWrite.val());
+
+    range_map(pageroot,
+            aligl_4k!(ptr::addr_of!(_rodata_start) as usize),
+            aligh_4k!(ptr::addr_of!(_rodata_end) as usize),
+            vm::EntryBits::ReadExecute.val());
+
+    range_map(pageroot,
+            aligl_4k!(ptr::addr_of!(_data_start) as usize),
+            aligh_4k!(ptr::addr_of!(_data_end) as usize),
+            vm::EntryBits::ReadWrite.val());
+
+    range_map(pageroot,
+            aligl_4k!(ptr::addr_of!(_bss_start) as usize),
+            aligh_4k!(ptr::addr_of!(_bss_end) as usize),
+            vm::EntryBits::ReadWrite.val());
+
+    range_map(pageroot,
+            aligl_4k!(ptr::addr_of!(_stack_end) as usize),
+            aligh_4k!(ptr::addr_of!(_stack_start) as usize),
+            vm::EntryBits::ReadWrite.val());
+
+    range_map(pageroot,
+            aligl_4k!(ptr::addr_of!(_virtio_start) as usize),
+            aligh_4k!(ptr::addr_of!(_virtio_end) as usize),
+            vm::EntryBits::ReadWrite.val());
+
+    let paddr = 0x1000_0000 as usize;
+    let vaddr = virt2phys(&pageroot, paddr)?.unwrap_or(0);
+
+    println!("Translation test: Paddr: {:#x} -> Vaddr: {:#x}", paddr, vaddr);
+
+    
+    Ok(((pageroot_ptr as usize) >> 12) | (8 << 60))
+}
+
+fn kmain() -> Result<(), KError> {
+    println!("Switched to S mode");
     loop{
         let ch_ops = SYS_UART.lock().get();
         match ch_ops {
@@ -140,10 +224,10 @@ fn kmain() -> Result<(), KError> {
             asm!("nop");
         }
     }
-    Ok(())
 }
-
 pub mod uart;
 pub mod zone;
 pub mod error;
 pub mod page;
+pub mod vm;
+pub mod kmem;

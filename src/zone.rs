@@ -101,7 +101,7 @@ impl mem_zone{
         }
     }
 
-    pub fn init(&mut self, _start: *mut u8, _end: *mut u8, _type: zone_type, allocator: AllocatorSelector) -> Result<(), KError>{
+    pub fn init(&mut self, _start: *const u8, _end: *const u8, _type: zone_type, allocator: AllocatorSelector) -> Result<(), KError>{
 
         self.begin_addr = _start as usize;
         self.end_addr = _end as usize;
@@ -115,6 +115,14 @@ impl mem_zone{
 
         self.pg_allocator = Some(allocator);
         Ok(())
+    }
+
+    pub fn get_size(&self) -> Result<usize, KError>{
+        if self.begin_addr > self.end_addr{
+            return Err(new_kerror!(KErrorType::ENOMEM));
+        } else{
+            return Ok(self.end_addr - self.begin_addr);
+        }
     }
 
     pub fn print_all(&self) {
