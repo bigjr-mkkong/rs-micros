@@ -173,13 +173,13 @@ pub fn virt2phys(root: &PageTable, vaddr: usize) -> Result<Option<usize>, KError
     Ok(None)
 }
 
-pub fn range_map(root: &mut PageTable, begin: usize, end: usize, bits: i64) -> Result<(), KError> {
+pub fn ident_range_map(root: &mut PageTable, begin: usize, end: usize, bits: i64) -> Result<(), KError> {
     let mut addr_begin = aligl_4k!(begin);
     let mut addr_end = aligh_4k!(end);
 
     let range_pgcnt = (addr_end - addr_begin) / page::PAGE_SIZE;
 
-    println!("Mapping 0x{:#x} -> 0x{:#x}", addr_begin, addr_end);
+    println!("Identical Map PADDR range: {:#x} -> {:#x}", addr_begin, addr_end);
 
     for _ in 0..range_pgcnt{
         map(root, addr_begin, addr_begin, bits, 0);

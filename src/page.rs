@@ -63,6 +63,7 @@ pub struct naive_allocator{
 impl page_allocator for naive_allocator{
     fn allocator_init(&mut self, zone_start: usize, zone_end: usize, zone_size: usize) -> Result<(), KError>{
         //Pretty wild, but lets keep this since this is a **NAIVE** allocator
+        println!("naive_Allocator Initializing");
         if zone_size < 3 * PAGE_SIZE {
             return Err(new_kerror!(KErrorType::ENOMEM));
         }

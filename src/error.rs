@@ -47,8 +47,8 @@ impl fmt::Display for KError {
 
         write!(
             f,
-            "{} in function {} at {}: line {}",
-            er_str, self.er_func, self.er_fname, self.er_line
+            "{} in {}: {}: at line {}",
+            er_str, self.er_fname, self.er_func, self.er_line
         )
     }
 }

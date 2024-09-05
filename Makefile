@@ -32,7 +32,7 @@ BS_OUT=os.bin
 QEMU=qemu-system-riscv64
 MACH=virt
 CPU=rv64
-CPUS=4
+CPU_CNT=4
 MEM=128M
 DRIVE=hdd.dsk
 
@@ -41,11 +41,10 @@ all:
 	$(CC) $(CFLAGS) $(LINKER_SCRIPT) $(INCLUDES) -o $(OUT) $(SOURCES_ASM) $(LIBS) $(LIB)
 	
 run: all dump
-	./mk-disk
 	$(QEMU) \
 		-machine $(MACH)\
+		-smp $(CPU_CNT)\
 		-cpu $(CPU)\
-		-smp $(CPUS)\
 		-m $(MEM)\
 		-nographic\
 		-serial mon:stdio\
@@ -55,8 +54,18 @@ run: all dump
 		-device virtio-blk-device,scsi=off,drive=foo\
 
 debug: all dump
-	./mk-disk
-	$(QEMU) -machine $(MACH) -cpu $(CPU) -smp $(CPUS) -m $(MEM)  -nographic -serial mon:stdio -bios none -kernel $(OUT) -drive if=none,format=raw,file=$(DRIVE),id=foo -device virtio-blk-device,scsi=off,drive=foo -s -S
+	$(QEMU) \
+		-machine $(MACH)\
+		-cpu $(CPU)\
+		-smp $(CPU_CNT)\
+		-m $(MEM)\
+		-nographic\
+		-serial mon:stdio\
+		-bios none\
+		-kernel $(OUT)\
+		-drive if=none,format=raw,file=$(DRIVE),id=foo\
+		-device virtio-blk-device,scsi=off,drive=foo\
+		-s -S
 
 bitstream: all
 	$(OBJCOPY) -I elf64-littleriscv -O binary $(OUT) $(BS_OUT)

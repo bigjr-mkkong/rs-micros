@@ -27,11 +27,13 @@ extern "C" {
 }
 
 use core::arch::asm;
+use core::mem::size_of;
 use core::ptr;
 use error::{KError, KErrorType};
 use zone::{zone_type, kmalloc_page, kfree_page};
 use spin::{Mutex, RwLock};
-use vm::{range_map, virt2phys};
+use vm::{ident_range_map, virt2phys};
+use cpu::{SATP_mode, TrapFrame};
 
 #[macro_export]
 macro_rules! print
@@ -91,10 +93,11 @@ fn abort() -> ! {
 #[no_mangle]
 extern "C"
 fn eh_func_kinit() -> usize{
+    let cpuid = cpu::mhartid_read();
     let init_return = kinit();
     if let Err(er_code) = init_return{
         println!("{}", er_code);
-        println!("kinit() Failed, System halting now...");
+        println!("kinit() Failed on CPU#{}, System halting now...", cpuid);
         loop{
             unsafe{
                 asm!("nop");
@@ -102,6 +105,21 @@ fn eh_func_kinit() -> usize{
         }
     }else{
         init_return.unwrap_or_default()
+    }
+}
+
+#[no_mangle]
+extern "C"
+fn eh_func_kinit_nobsp() -> usize{
+
+    /*
+     * TODO
+     * Implement trapstack memory initializatin for non-bsp core
+     */
+    loop{
+        unsafe{
+            asm!("nop");
+        }
     }
 }
 
@@ -125,16 +143,20 @@ fn eh_func_kmain(){
 // | |  _| |  | | | |  _ \ / _ \ | |      \ \ / / _ \ | |_) \___ \ 
 // | |_| | |__| |_| | |_) / ___ \| |___    \ V / ___ \|  _ < ___) |
 //  \____|_____\___/|____/_/   \_\_____|    \_/_/   \_\_| \_\____/ 
-const zone_defval:Mutex<zone::mem_zone> = spin::Mutex::new(zone::mem_zone::new());
-static SYS_ZONES: [spin::Mutex<zone::mem_zone>; 3] = [
+pub const zone_defval:Mutex<zone::mem_zone> = spin::Mutex::new(zone::mem_zone::new());
+pub static SYS_ZONES: [spin::Mutex<zone::mem_zone>; 3] = [
     zone_defval; zone_type::type_cnt()
 ];
-static SYS_UART: Mutex<uart::Uart> = Mutex::new(uart::Uart::new(0x1000_0000));
+pub static SYS_UART: Mutex<uart::Uart> = Mutex::new(uart::Uart::new(0x1000_0000));
+pub static mut KERNEL_TRAP_FRAME: [TrapFrame; 8] = [TrapFrame::new(); 8];
+
 
 fn kinit() -> Result<usize, KError> {
     SYS_UART.lock().init();
 
     println!("\nHello world");
+    let current_cpu = cpu::mhartid_read();
+    println!("Initializer running on CPU#{}", current_cpu);
 
     /*
      * Setting up new zone
@@ -159,59 +181,154 @@ fn kinit() -> Result<usize, KError> {
     let kheap_begin = kmem::get_kheap_start();
     let kheap_pgcnt = kmem::get_kheap_pgcnt();
 
-    range_map(pageroot,
+    ident_range_map(pageroot,
             aligl_4k!(ptr::addr_of!(_text_start) as usize),
             aligh_4k!(ptr::addr_of!(_text_end) as usize),
             vm::EntryBits::ReadExecute.val());
 
-    let usz_heap_start = ptr::addr_of!(_heap_start) as usize;
-    let usz_heap_end = usz_heap_start + SYS_ZONES[zone_type::ZONE_NORMAL.val()].lock().get_size()?;
-    range_map(pageroot,
-            usz_heap_start,
-            usz_heap_end,
-            vm::EntryBits::ReadWrite.val());
+    // let usz_heap_start = ptr::addr_of!(_heap_start) as usize;
+    // let usz_heap_end = usz_heap_start + SYS_ZONES[zone_type::ZONE_NORMAL.val()].lock().get_size()?;
+    // ident_range_map(pageroot,
+    //         usz_heap_start,
+    //         usz_heap_end,
+    //         vm::EntryBits::ReadWrite.val());
 
-    range_map(pageroot, 
+    ident_range_map(pageroot, 
             kheap_begin as usize,
             kheap_begin as usize + page::PAGE_SIZE * kheap_pgcnt,
             vm::EntryBits::ReadWrite.val());
 
-    range_map(pageroot,
+    ident_range_map(pageroot,
             aligl_4k!(ptr::addr_of!(_rodata_start) as usize),
             aligh_4k!(ptr::addr_of!(_rodata_end) as usize),
             vm::EntryBits::ReadExecute.val());
 
-    range_map(pageroot,
+    ident_range_map(pageroot,
             aligl_4k!(ptr::addr_of!(_data_start) as usize),
             aligh_4k!(ptr::addr_of!(_data_end) as usize),
             vm::EntryBits::ReadWrite.val());
 
-    range_map(pageroot,
+    ident_range_map(pageroot,
             aligl_4k!(ptr::addr_of!(_bss_start) as usize),
             aligh_4k!(ptr::addr_of!(_bss_end) as usize),
             vm::EntryBits::ReadWrite.val());
 
-    range_map(pageroot,
+    ident_range_map(pageroot,
             aligl_4k!(ptr::addr_of!(_stack_end) as usize),
             aligh_4k!(ptr::addr_of!(_stack_start) as usize),
             vm::EntryBits::ReadWrite.val());
 
-    range_map(pageroot,
+
+//uart mmio area
+    ident_range_map(pageroot,
             aligl_4k!(ptr::addr_of!(_virtio_start) as usize),
             aligh_4k!(ptr::addr_of!(_virtio_end) as usize),
             vm::EntryBits::ReadWrite.val());
 
+//qemu mmio memory mapping according to qemu/hw/riscv/virt.c
+    
+    //CLIENT
+    ident_range_map(pageroot,
+            0x0200_0000,
+            0x0200_ffff,
+            vm::EntryBits::ReadWrite.val());
+
+
+    //PLIC
+    ident_range_map(pageroot,
+            0x0c00_0000,
+            0x0c00_2000,
+            vm::EntryBits::ReadWrite.val());
+
+
     let paddr = 0x1000_0000 as usize;
     let vaddr = virt2phys(&pageroot, paddr)?.unwrap_or(0);
 
-    println!("Translation test: Paddr: {:#x} -> Vaddr: {:#x}", paddr, vaddr);
-
+    println!("VM Walker test: Paddr: {:#x} -> Vaddr: {:#x}", paddr, vaddr);
     
-    Ok(((pageroot_ptr as usize) >> 12) | (8 << 60))
+    /*
+     * TODO:
+     * We need a well-srtuctured rust rv64gc Machine Abstraction for those csr(s)
+     */
+    
+    /*
+     * Memory allocation for trap stack
+     */
+    unsafe{
+        cpu::mscratch_write((&mut KERNEL_TRAP_FRAME[0] as *mut TrapFrame) as usize);
+        cpu::sscratch_write(cpu::mscratch_read());
+
+        KERNEL_TRAP_FRAME[current_cpu].trap_stack = 
+                kmalloc_page(zone_type::ZONE_NORMAL, 1)?.add(page::PAGE_SIZE);
+
+        ident_range_map(pageroot, 
+                KERNEL_TRAP_FRAME[current_cpu].trap_stack.sub(page::PAGE_SIZE) as usize,
+                KERNEL_TRAP_FRAME[current_cpu].trap_stack as usize,
+                vm::EntryBits::ReadWrite.val());
+
+        // ident_range_map(pageroot,
+        //         cpu::mscratch_read(),
+        //         cpu::mscratch_read() + (current_cpu+1) * size_of::<TrapFrame>(),
+        //         vm::EntryBits::ReadWrite.val());
+
+
+        let trapstack_paddr = KERNEL_TRAP_FRAME[current_cpu].trap_stack as usize - 1;
+        let trapstack_vaddr = virt2phys(&pageroot, trapstack_paddr)?.unwrap_or(0);
+
+        println!("CPU#{} TrapStack: (vaddr){:#x} -> (paddr){:#x}", 
+                current_cpu,
+                trapstack_paddr, 
+                trapstack_vaddr
+                );
+
+        let trapfram_paddr = ptr::addr_of_mut!(KERNEL_TRAP_FRAME[current_cpu]) as usize;
+        let trapfram_vaddr = virt2phys(&pageroot, trapfram_paddr)?.unwrap_or(0);
+
+        println!("CPU#{} TrapFrame: (vaddr){:#x} -> (paddr){:#x}", 
+                current_cpu,
+                trapfram_paddr, 
+                trapfram_vaddr
+                );
+    }
+
+    unsafe{
+        asm!("ebreak");
+    }
+
+    /*
+     * Set up satp register to provide paging mode and PPN of 
+     * root page table
+     */
+    cpu::satp_write(SATP_mode::Sv39, 0, pageroot_ptr as usize);
+
+    /*
+     * Set up arrival address of S-mode entry
+     */
+    cpu::mepc_write(eh_func_kmain as usize);
+
+    /*
+     * enable S-mode + MPIE + SPIE
+     */
+    cpu::mstatus_write((1 << 11) | (1 << 7) | (1 << 5) as usize);
+
+    /*
+     * Now we only consider sw interrupt, timer and external
+     * interrupt will be enabled in future
+     */
+    cpu::mie_write((1 << 3) as usize);
+    
+    cpu::sfence_vma();
+
+    Ok(0)
 }
 
 fn kmain() -> Result<(), KError> {
     println!("Switched to S mode");
+
+    unsafe{
+        asm!("ebreak");
+    }
+
     loop{
         let ch_ops = SYS_UART.lock().get();
         match ch_ops {
@@ -231,3 +348,5 @@ pub mod error;
 pub mod page;
 pub mod vm;
 pub mod kmem;
+pub mod trap;
+pub mod cpu;
