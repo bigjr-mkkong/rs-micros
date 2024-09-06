@@ -31,3 +31,4 @@ There are many TODOs in src code, but here are some general things:
   - [ ] ISA abstraction
   - [ ] Proper logging system for multi-core
   - [ ] CPU dumper inside trap code
+  - [ ] `fsd` and `fld` would report illegal instruction error
