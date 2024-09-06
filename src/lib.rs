@@ -110,21 +110,6 @@ fn eh_func_kinit() -> usize{
 
 #[no_mangle]
 extern "C"
-fn eh_func_kinit_nobsp() -> usize{
-
-    /*
-     * TODO
-     * Implement trapstack memory initializatin for non-bsp core
-     */
-    loop{
-        unsafe{
-            asm!("nop");
-        }
-    }
-}
-
-#[no_mangle]
-extern "C"
 fn eh_func_kmain(){
     let main_return = kmain();
     if let Err(er_code) = main_return{
@@ -138,6 +123,23 @@ fn eh_func_kmain(){
     }
 }
 
+#[no_mangle]
+extern "C"
+fn eh_func_kinit_nobsp() -> usize{
+    let cpuid = cpu::mhartid_read();
+    let init_return = nobsp_kinit();
+    if let Err(er_code) = init_return{
+        println!("{}", er_code);
+        println!("nobsp_kinit() Failed at CPU#{}, System halting now...", cpuid);
+        loop{
+            unsafe{
+                asm!("nop");
+            }
+        }
+    }else{
+        init_return.unwrap_or_default()
+    }
+}
 //   ____ _     ___  ____    _    _      __     ___    ____  ____  
 //  / ___| |   / _ \| __ )  / \  | |     \ \   / / \  |  _ \/ ___| 
 // | |  _| |  | | | |  _ \ / _ \ | |      \ \ / / _ \ | |_) \___ \ 
@@ -321,6 +323,25 @@ fn kinit() -> Result<usize, KError> {
 
     Ok(0)
 }
+
+fn nobsp_kinit() -> Result<usize, KError> {
+    let current_cpu = cpu::mhartid_read();
+
+    /* TODO
+     * Setting up nobsp trap frame
+     * Now it is able to running, but any interrupt will cause
+     * store access fault
+     */
+
+    println!("CPU#{} is running its nobsp_kinit()", current_cpu);
+    loop{
+        unsafe{
+            asm!("nop");
+        }
+    }
+    Ok(0)
+}
+
 
 fn kmain() -> Result<(), KError> {
     println!("Switched to S mode");

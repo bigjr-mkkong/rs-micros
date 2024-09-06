@@ -25,7 +25,7 @@ _start:
 2:
 	la		sp, _stack_start
     #enable M-mode and fs = 0b11
-	li		t0, (0b11 << 11) | (0b11 << 13) # | (1 << 13)# | (1 << 3)
+	li		t0, (0b11 << 11) | (0b11 << 13) | (1 << 7) # | (1 << 13)# | (1 << 3)
 	csrw	mstatus, t0
     #set mepc
 	la		t1, eh_func_kinit
@@ -45,7 +45,7 @@ _start:
 
 3:
 
-#switch to S-mode
+#bsp switch to S-mode
     mret
 
     
@@ -58,8 +58,10 @@ _start:
     mul     t0, t0, a0
     sub     sp, sp, t0
 
+    la      t2, m_trap_vector
+    csrw    mtvec, t2
 
-    li      t0, 0b11 << 11 | (1 << 7)
+    li      t0, 0b11 << 11 | (0b11 << 13) | (1 << 7)
     csrw    mstatus, t0
 
     li      t3, 1 << 3
@@ -68,10 +70,14 @@ _start:
     la      t1, eh_func_kinit_nobsp
     csrw    mepc, t1
 
-    la      t2, m_trap_vector
-    csrw    mtvec, t2
+    csrw    pmpaddr0, zero
+    li      t0, 7 | (1 << 3)
+    csrw    pmpcfg0, t0
 
-    la      ra, 5f
+    la      ra, 6f
+    mret
+
+6:
     mret
     
 5:
