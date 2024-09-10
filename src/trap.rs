@@ -3,7 +3,7 @@ use crate::SYS_UART;
 
 #[no_mangle]
 extern "C"
-fn m_trap(xepc: usize, 
+fn s_trap(xepc: usize, 
         xtval: usize,
         xcause: usize,
         hart: usize,

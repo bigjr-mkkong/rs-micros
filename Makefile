@@ -50,8 +50,6 @@ run: all dump
 		-serial mon:stdio\
 		-bios none\
 		-kernel $(OUT)\
-		-drive if=none,format=raw,file=$(DRIVE),id=foo\
-		-device virtio-blk-device,scsi=off,drive=foo\
 
 debug: all dump
 	$(QEMU) \
@@ -63,8 +61,6 @@ debug: all dump
 		-serial mon:stdio\
 		-bios none\
 		-kernel $(OUT)\
-		-drive if=none,format=raw,file=$(DRIVE),id=foo\
-		-device virtio-blk-device,scsi=off,drive=foo\
 		-s -S
 
 bitstream: all

@@ -31,16 +31,17 @@ use core::mem::size_of;
 use core::ptr;
 use error::{KError, KErrorType};
 use zone::{zone_type, kmalloc_page, kfree_page};
-use spin::{Mutex, RwLock};
+use spin::Mutex;
 use vm::{ident_range_map, virt2phys};
-use cpu::{SATP_mode, TrapFrame};
+use cpu::{SATP_mode, TrapFrame, irq_mutex, which_cpu};
+use riscv::register::{mideleg, medeleg};
 
 #[macro_export]
 macro_rules! print
 {
     ($($args:tt)+) => ({
         use core::fmt::Write;
-        let _ = write!(SYS_UART.lock(), $($args)+);
+        let _ = write!(SYS_UART.lock().dat, $($args)+);
     });
 }
 
@@ -145,16 +146,16 @@ fn eh_func_kinit_nobsp() -> usize{
 // | |  _| |  | | | |  _ \ / _ \ | |      \ \ / / _ \ | |_) \___ \ 
 // | |_| | |__| |_| | |_) / ___ \| |___    \ V / ___ \|  _ < ___) |
 //  \____|_____\___/|____/_/   \_\_____|    \_/_/   \_\_| \_\____/ 
-pub const zone_defval:Mutex<zone::mem_zone> = spin::Mutex::new(zone::mem_zone::new());
-pub static SYS_ZONES: [spin::Mutex<zone::mem_zone>; 3] = [
+pub const zone_defval:irq_mutex<zone::mem_zone> = irq_mutex::new(zone::mem_zone::new());
+pub static SYS_ZONES: [irq_mutex<zone::mem_zone>; 3] = [
     zone_defval; zone_type::type_cnt()
 ];
-pub static SYS_UART: Mutex<uart::Uart> = Mutex::new(uart::Uart::new(0x1000_0000));
+pub static SYS_UART: irq_mutex<uart::Uart> = irq_mutex::new(uart::Uart::new(0x1000_0000));
 pub static mut KERNEL_TRAP_FRAME: [TrapFrame; 8] = [TrapFrame::new(); 8];
 
 
 fn kinit() -> Result<usize, KError> {
-    SYS_UART.lock().init();
+    SYS_UART.lock().dat.init();
 
     println!("\nHello world");
     let current_cpu = cpu::mhartid_read();
@@ -163,13 +164,13 @@ fn kinit() -> Result<usize, KError> {
     /*
      * Setting up new zone
      */
-    SYS_ZONES[zone_type::ZONE_NORMAL.val()].lock().init(
+    SYS_ZONES[zone_type::ZONE_NORMAL.val()].lock().dat.init(
             ptr::addr_of!(_heap_start),
             ptr::addr_of!(_heap_end),
             zone_type::ZONE_NORMAL,
         zone::AllocatorSelector::NaiveAllocator)?;
 
-    SYS_ZONES[zone_type::ZONE_UNDEF.val()].lock().init(
+    SYS_ZONES[zone_type::ZONE_UNDEF.val()].lock().dat.init(
         0 as *const u8,
         0 as *const u8,
         zone_type::ZONE_UNDEF,
@@ -249,16 +250,10 @@ fn kinit() -> Result<usize, KError> {
     println!("VM Walker test: Paddr: {:#x} -> Vaddr: {:#x}", paddr, vaddr);
     
     /*
-     * TODO:
-     * We need a well-srtuctured rust rv64gc Machine Abstraction for those csr(s)
-     */
-    
-    /*
      * Memory allocation for trap stack
      */
     unsafe{
-        cpu::mscratch_write((&mut KERNEL_TRAP_FRAME[0] as *mut TrapFrame) as usize);
-        cpu::sscratch_write(cpu::mscratch_read());
+        cpu::sscratch_write((&mut KERNEL_TRAP_FRAME[0] as *mut TrapFrame) as usize);
 
         KERNEL_TRAP_FRAME[current_cpu].trap_stack = 
                 kmalloc_page(zone_type::ZONE_NORMAL, 1)?.add(page::PAGE_SIZE);
@@ -293,10 +288,6 @@ fn kinit() -> Result<usize, KError> {
                 );
     }
 
-    unsafe{
-        asm!("ebreak");
-    }
-
     /*
      * Set up satp register to provide paging mode and PPN of 
      * root page table
@@ -311,13 +302,28 @@ fn kinit() -> Result<usize, KError> {
     /*
      * enable S-mode + MPIE + SPIE
      */
-    cpu::mstatus_write((1 << 11) | (1 << 7) | (1 << 5) as usize);
+    cpu::mstatus_write((1 << 11) | (1 << 5) as usize);
 
     /*
      * Now we only consider sw interrupt, timer and external
      * interrupt will be enabled in future
+     *
+     * We will delegate all interrupt into S-mode, enable S-mode
+     * interrupt, and then disable M-mode interrupt
      */
-    cpu::mie_write((1 << 3) as usize);
+
+    unsafe{
+        mideleg::set_sext();
+        mideleg::set_ssoft();
+        mideleg::set_stimer();
+
+        let all_exception:usize = 0xffffffff;
+        asm!("csrw medeleg, {0}", in(reg) all_exception);
+    }
+
+    cpu::mie_write(0 as usize);
+
+    cpu::sie_write((1 << 3) as usize);
     
     cpu::sfence_vma();
 
@@ -325,15 +331,16 @@ fn kinit() -> Result<usize, KError> {
 }
 
 fn nobsp_kinit() -> Result<usize, KError> {
-    let current_cpu = cpu::mhartid_read();
-
     /* TODO
      * Setting up nobsp trap frame
      * Now it is able to running, but any interrupt will cause
      * store access fault
+     *
+     * Also set up all exception/interrupt delegation into S mode
+     * just like what bsp did
      */
 
-    println!("CPU#{} is running its nobsp_kinit()", current_cpu);
+    println!("CPU#{} is running its nobsp_kinit()", which_cpu());
     loop{
         unsafe{
             asm!("nop");
@@ -351,7 +358,7 @@ fn kmain() -> Result<(), KError> {
     }
 
     loop{
-        let ch_ops = SYS_UART.lock().get();
+        let ch_ops = SYS_UART.lock().dat.get();
         match ch_ops {
             Some(ch) => {
                 println!("{}", ch as char);

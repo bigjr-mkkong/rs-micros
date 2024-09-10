@@ -24,15 +24,22 @@ _start:
 	bltu	a0, a1, 1b
 2:
 	la		sp, _stack_start
+
     #enable M-mode and fs = 0b11
 	li		t0, (0b11 << 11) | (0b11 << 13) | (1 << 7) # | (1 << 13)# | (1 << 3)
 	csrw	mstatus, t0
+
     #set mepc
 	la		t1, eh_func_kinit
 	csrw	mepc, t1
+
     #set mtvec
-	la		t2, m_trap_vector
-	csrw	mtvec, t2
+	# la		t2, m_trap_vector
+	# csrw	mtvec, t2
+
+    #set stvec
+	la		t2, s_trap_vector
+	csrw	stvec, t2
 
 	la		ra, 3f
 
@@ -58,14 +65,12 @@ _start:
     mul     t0, t0, a0
     sub     sp, sp, t0
 
-    la      t2, m_trap_vector
+    la      t2, s_trap_vector
     csrw    mtvec, t2
+    csrw    stvec, t2
 
     li      t0, 0b11 << 11 | (0b11 << 13) | (1 << 7)
     csrw    mstatus, t0
-
-    li      t3, 1 << 3
-    csrw    mie, t3
 
     la      t1, eh_func_kinit_nobsp
     csrw    mepc, t1

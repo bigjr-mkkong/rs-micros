@@ -1,5 +1,8 @@
-use core::ptr::null_mut;
+use core::ptr::{null_mut, addr_of};
 use core::arch::asm;
+use riscv::register::{sie, mstatus};
+use spin::Mutex;
+use crate::_stack_start;
 
 #[derive(Clone, Copy)]
 pub struct TrapFrame{
@@ -114,6 +117,22 @@ pub fn mie_write(mie_new_val: usize) {
     }
 }
 
+
+pub fn sie_read() -> usize{
+    let sie_val: usize;
+    unsafe{
+        asm!("csrr {0}, sie", out(reg) sie_val);
+    }
+
+    sie_val
+}
+
+pub fn sie_write(sie_new_val: usize) {
+    unsafe{
+        asm!("csrw sie, {0}", in(reg) sie_new_val);
+    }
+}
+
 pub fn mscratch_read() -> usize{
     let mscratch_val: usize;
     unsafe{
@@ -140,7 +159,7 @@ pub fn sscratch_read() -> usize{
 
 pub fn sscratch_write(sscratch_new_val: usize) {
     unsafe{
-        asm!("csrr {0}, sscratch", in(reg) sscratch_new_val);
+        asm!("csrw sscratch, {0}", in(reg) sscratch_new_val);
     }
 }
 
@@ -156,5 +175,74 @@ pub fn mhartid_read() -> usize{
 pub fn sfence_vma(){
     unsafe{
         asm!("sfence.vma");
+    }
+}
+
+#[no_mangle]
+pub extern "C"
+fn which_cpu() -> usize{
+    let sp_val: usize;
+    let stack_base = addr_of!(_stack_start) as usize;
+    unsafe{
+        asm!("move {0}, sp", out(reg) sp_val);
+    }
+    
+    ((stack_base - sp_val) / 0x10000) as usize
+
+}
+
+pub fn cli() -> usize{
+    let sie_val = sie::read().bits();
+
+    unsafe{
+        asm!("csrw sie, zero");
+    }
+
+    sie_val
+}
+
+pub fn sti(mie_val: usize) {
+    unsafe{
+        asm!("csrw sie, {0}", in(reg) mie_val);
+    }
+}
+
+pub struct irq_mutex<T>{
+    mie_scratch: usize,
+    dat: Mutex<T>
+}
+
+impl<T> irq_mutex<T> {
+    pub const fn new(dat: T) -> Self{
+        Self{
+            dat: Mutex::new(dat),
+            mie_scratch: 0
+        }
+    }
+
+    pub fn lock(&self) -> irq_mutex_guard<'_, T> {
+        let prev_mie_val = cli();
+
+        let guard = self.dat.lock();
+
+        irq_mutex_guard{
+            dat: guard,
+            mie_val: prev_mie_val
+        }
+    }
+
+
+}
+
+pub struct irq_mutex_guard<'a, T> {
+    pub dat: spin::MutexGuard<'a, T>,
+    mie_val: usize
+}
+
+impl<T> Drop for irq_mutex_guard<'_, T>{
+    fn drop(&mut self) {
+        if self.mie_val != 0{
+            sti(self.mie_val);
+        }
     }
 }

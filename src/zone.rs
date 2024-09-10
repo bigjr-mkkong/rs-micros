@@ -151,9 +151,9 @@ impl mem_zone{
 }
 
 pub fn kmalloc_page(ztype: zone_type, pg_cnt: usize) -> Result<*mut u8, KError>{
-    SYS_ZONES[ztype.val()].lock().alloc_pages(pg_cnt)
+    SYS_ZONES[ztype.val()].lock().dat.alloc_pages(pg_cnt)
 }
 
 pub fn kfree_page(ztype: zone_type, addr: *mut u8) -> Result<(), KError> {
-    SYS_ZONES[ztype.val()].lock().free_pages(addr)
+    SYS_ZONES[ztype.val()].lock().dat.free_pages(addr)
 }

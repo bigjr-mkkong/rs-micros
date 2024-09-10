@@ -1,12 +1,13 @@
 .option norvc
 .section .text
-.global m_trap_vector
-m_trap_vector:
+.global s_trap_vector
+s_trap_vector:
 
 # Disable interrupt
-    csrrc   zero, mie, 0x8
+    csrrc   zero, sie, 0x8
 
-    csrrw   t0, mscratch, t0
+#KERNEL_TRAP_FRAME addr is inside mscratch
+    csrrw   t0, sscratch, t0
 
 # Ignore zero register
 # Save GP regs
@@ -78,21 +79,22 @@ m_trap_vector:
 
 
 # switch back original t0(x5) value
-    csrr    t1, mscratch
+    csrr    t1, sscratch
     sd      t1, 4 * 8(t0)
 
+    call    which_cpu
+    move    a3, a0
 
-    csrr    a0, mepc
-    csrr    a1, mtval
-    csrr    a2, mcause
-    csrr    a3, mhartid
-    csrr    a4, mstatus
+    csrr    a0, sepc
+    csrr    a1, stval
+    csrr    a2, scause
+    csrr    a4, sstatus
     move    a5, t0
 
     ld      sp, 65 * 8(t0)
-    call    m_trap
+    call    s_trap
 
-    csrw    mepc, a0
+    csrw    sepc, a0
 
 # Ignore zero register
 # Load GP regs
@@ -162,8 +164,8 @@ m_trap_vector:
     #fld     f30, 62 * 8(t0)
     #fld     f31, 63 * 8(t0)
 
-    csrrw   t0, mscratch, t0
+    csrrw   t0, sscratch, t0
 
-    csrrs   zero, mie, 0x8
+    csrrs   zero, sie, 0x8
 
-    mret
+    sret
