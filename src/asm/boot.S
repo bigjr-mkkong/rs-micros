@@ -1,6 +1,9 @@
 .option norvc
 
 .section .data
+.global cpu_early_block
+cpu_early_block:    
+    .dword      1
 
 .section .text.init
 .global _start
@@ -64,6 +67,14 @@ _start:
     csrr    a0, mhartid
     mul     t0, t0, a0
     sub     sp, sp, t0
+
+    li      t1, 1
+    sll     t1, t1, a0
+#   Non-bsp will block until bsp kinit() finished
+7:
+    ld      t2, cpu_early_block
+    and     t2, t2, t1
+    beqz    t2, 7b
 
     la      t2, s_trap_vector
     csrw    mtvec, t2

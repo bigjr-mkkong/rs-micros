@@ -4,7 +4,8 @@
 s_trap_vector:
 
 # Disable interrupt
-    csrrc   zero, sie, 0x8
+    csrci   sstatus, (1 << 1)
+
 
 #KERNEL_TRAP_FRAME addr is inside mscratch
     csrrw   t0, sscratch, t0
@@ -166,6 +167,6 @@ s_trap_vector:
 
     csrrw   t0, sscratch, t0
 
-    csrrs   zero, sie, 0x8
+    csrsi   sstatus, (1 << 1)
 
     sret
