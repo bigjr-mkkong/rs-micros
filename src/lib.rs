@@ -43,7 +43,7 @@ macro_rules! print
 {
     ($($args:tt)+) => ({
         use core::fmt::Write;
-        let _ = write!(SYS_UART.lock().dat, $($args)+);
+        let _ = write!(SYS_UART.lock(), $($args)+);
     });
 }
 
@@ -172,7 +172,7 @@ pub static mut KERNEL_TRAP_FRAME: [TrapFrame; 8] = [TrapFrame::new(); 8];
 
 
 fn kinit() -> Result<usize, KError> {
-    SYS_UART.lock().dat.init();
+    SYS_UART.lock().init();
 
     println!("\nHello world");
     let current_cpu = cpu::mhartid_read();
@@ -181,13 +181,13 @@ fn kinit() -> Result<usize, KError> {
     /*
      * Setting up new zone
      */
-    SYS_ZONES[zone_type::ZONE_NORMAL.val()].lock().dat.init(
+    SYS_ZONES[zone_type::ZONE_NORMAL.val()].lock().init(
             ptr::addr_of!(_heap_start),
             ptr::addr_of!(_heap_end),
             zone_type::ZONE_NORMAL,
         zone::AllocatorSelector::NaiveAllocator)?;
 
-    SYS_ZONES[zone_type::ZONE_UNDEF.val()].lock().dat.init(
+    SYS_ZONES[zone_type::ZONE_UNDEF.val()].lock().init(
         0 as *const u8,
         0 as *const u8,
         zone_type::ZONE_UNDEF,
@@ -436,7 +436,7 @@ fn kmain() -> Result<(), KError> {
     }
 
     loop{
-        let ch_ops = SYS_UART.lock().dat.get();
+        let ch_ops = SYS_UART.lock().get();
         match ch_ops {
             Some(ch) => {
                 println!("{}", ch as char);
@@ -458,7 +458,7 @@ fn nobsp_kmain() -> Result<(), KError> {
     }
 
     loop{
-        let ch_ops = SYS_UART.lock().dat.get();
+        let ch_ops = SYS_UART.lock().get();
         match ch_ops {
             Some(ch) => {
                 println!("{}", ch as char);

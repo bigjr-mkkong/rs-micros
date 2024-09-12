@@ -1,5 +1,6 @@
 use core::ptr::{null_mut, addr_of};
 use core::arch::asm;
+use core::ops::{Deref, DerefMut};
 use riscv::register::{sie, mstatus};
 use spin::Mutex;
 use crate::_stack_start;
@@ -191,43 +192,35 @@ fn which_cpu() -> usize{
 
 }
 
-pub fn cli() -> usize{
-    let sie_val = sie::read().bits();
-
+pub fn cli() {
     unsafe{
-        asm!("csrw sie, zero");
+        asm!("csrci sstatus, (1 << 1)");
     }
 
-    sie_val
 }
 
-pub fn sti(mie_val: usize) {
+pub fn sti() {
     unsafe{
-        asm!("csrw sie, {0}", in(reg) mie_val);
+        asm!("csrsi sstatus, (1 << 1)");
     }
 }
 
 pub struct irq_mutex<T>{
-    mie_scratch: usize,
-    dat: Mutex<T>
+    inner_lock: Mutex<T>
 }
 
 impl<T> irq_mutex<T> {
     pub const fn new(dat: T) -> Self{
         Self{
-            dat: Mutex::new(dat),
-            mie_scratch: 0
+            inner_lock: Mutex::new(dat),
         }
     }
 
     pub fn lock(&self) -> irq_mutex_guard<'_, T> {
-        let prev_mie_val = cli();
-
-        let guard = self.dat.lock();
+        cli();
 
         irq_mutex_guard{
-            dat: guard,
-            mie_val: prev_mie_val
+            dat: self.inner_lock.lock()
         }
     }
 
@@ -236,13 +229,25 @@ impl<T> irq_mutex<T> {
 
 pub struct irq_mutex_guard<'a, T> {
     pub dat: spin::MutexGuard<'a, T>,
-    mie_val: usize
 }
 
 impl<T> Drop for irq_mutex_guard<'_, T>{
     fn drop(&mut self) {
-        if self.mie_val != 0{
-            sti(self.mie_val);
-        }
+        sti()
+    }
+}
+
+impl <'a, T> Deref for irq_mutex_guard<'a, T>{
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target{
+        &self.dat
+    }
+}
+
+
+impl <'a, T> DerefMut for irq_mutex_guard<'a, T>{
+    fn deref_mut(&mut self) -> &mut Self::Target{
+        &mut self.dat
     }
 }
