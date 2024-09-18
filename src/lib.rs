@@ -256,10 +256,14 @@ fn kinit() -> Result<usize, KError> {
 
     //PLIC
     ident_range_map(pageroot,
-            0x0c00_0000,
-            0x0c00_2000,
+            extint::PLIC_RNG1_BEGIN,
+            extint::PLIC_RNG1_END,
             vm::EntryBits::ReadWrite.val());
 
+    ident_range_map(pageroot,
+            extint::PLIC_RNG2_BEGIN,
+            extint::PLIC_RNG2_END,
+            vm::EntryBits::ReadWrite.val());
 
     let paddr = 0x1000_0000 as usize;
     let vaddr = virt2phys(&pageroot, paddr)?.unwrap_or(0);
@@ -428,7 +432,7 @@ fn nobsp_kinit() -> Result<usize, KError> {
 
 
 fn kmain() -> Result<(), KError> {
-    let current_cpu = which_cpu();
+    let current_cpu = which_cpu();;
     println!("CPU#{} Switched to S mode", current_cpu);
 
     unsafe{
@@ -479,3 +483,4 @@ pub mod vm;
 pub mod kmem;
 pub mod trap;
 pub mod cpu;
+pub mod extint;

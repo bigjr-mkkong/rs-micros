@@ -2,8 +2,10 @@ use core::ptr::{null_mut, addr_of};
 use core::arch::asm;
 use core::ops::{Deref, DerefMut};
 use riscv::register::{sie, mstatus};
-use spin::Mutex;
+use spin::{Mutex, RwLock};
 use crate::_stack_start;
+
+pub const MAX_HARTS:usize = 4;
 
 #[derive(Clone, Copy)]
 pub struct TrapFrame{
@@ -249,5 +251,74 @@ impl <'a, T> Deref for irq_mutex_guard<'a, T>{
 impl <'a, T> DerefMut for irq_mutex_guard<'a, T>{
     fn deref_mut(&mut self) -> &mut Self::Target{
         &mut self.dat
+    }
+}
+
+pub struct irq_rwlock<T>{
+    inner_lock: RwLock<T>
+}
+
+pub struct irq_rwlock_writeguard<'a, T> {
+    pub dat: Option<spin::RwLockWriteGuard<'a, T>>,
+}
+
+impl<T> irq_rwlock<T> {
+    pub const fn new(dat: T) -> Self{
+        Self{
+            inner_lock: RwLock::new(dat),
+        }
+    }
+
+    pub fn write(&self) -> irq_rwlock_writeguard<'_, T> {
+        cli();
+
+        let guard = self.inner_lock.write();
+
+        irq_rwlock_writeguard{
+            dat: Some(guard)
+        }
+    }
+
+
+    pub fn read(&self) -> irq_rwlock_readguard<'_, T> {
+        let guard = self.inner_lock.read();
+
+        irq_rwlock_readguard{
+            dat: guard
+        }
+    }
+}
+
+
+impl<T> Drop for irq_rwlock_writeguard<'_, T>{
+    fn drop(&mut self) {
+        sti()
+    }
+}
+
+impl <'a, T> Deref for irq_rwlock_writeguard<'a, T>{
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target{
+        &self.dat.as_ref().unwrap()
+    }
+}
+
+impl <'a, T> DerefMut for irq_rwlock_writeguard<'a, T>{
+    fn deref_mut(&mut self) -> &mut Self::Target{
+        self.dat.as_mut().unwrap()
+    }
+}
+
+
+pub struct irq_rwlock_readguard<'a, T> {
+    pub dat: spin::RwLockReadGuard<'a, T>,
+}
+
+impl <'a, T> Deref for irq_rwlock_readguard<'a, T>{
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target{
+        &self.dat
     }
 }

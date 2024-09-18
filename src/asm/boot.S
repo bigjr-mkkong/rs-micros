@@ -1,17 +1,19 @@
 .option norvc
 
 .section .data
+.equ    BSP,     0
 .global cpu_early_block
 cpu_early_block:    
-    .dword      1
+    .dword      (1 << BSP)
 
 .section .text.init
 .global _start
 _start:
 	csrw	satp, zero
 	csrr	t0, mhartid
+    li      t1, BSP
 # Set non-bsp cores to dead loop
-	bnez	t0, 4f
+	bne	t0, t1, 4f
 
 .option push
 .option norelax
@@ -26,7 +28,11 @@ _start:
 	addi	a0, a0, 8
 	bltu	a0, a1, 1b
 2:
-	la		sp, _stack_start
+    la      sp, _stack_start
+    li      t0, 0x10000
+    csrr    a0, mhartid
+    mul     t0, t0, a0
+    sub     sp, sp, t0
 
     #enable M-mode and fs = 0b11
 	li		t0, (0b11 << 11) | (0b11 << 13) | (1 << 7) # | (1 << 13)# | (1 << 3)
