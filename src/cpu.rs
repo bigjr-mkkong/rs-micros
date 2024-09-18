@@ -281,6 +281,8 @@ impl<T> irq_rwlock<T> {
 
 
     pub fn read(&self) -> irq_rwlock_readguard<'_, T> {
+        cli();
+
         let guard = self.inner_lock.read();
 
         irq_rwlock_readguard{
@@ -313,6 +315,12 @@ impl <'a, T> DerefMut for irq_rwlock_writeguard<'a, T>{
 
 pub struct irq_rwlock_readguard<'a, T> {
     pub dat: spin::RwLockReadGuard<'a, T>,
+}
+
+impl<T> Drop for irq_rwlock_readguard<'_, T> {
+    fn drop(&mut self) {
+        sti()
+    }
 }
 
 impl <'a, T> Deref for irq_rwlock_readguard<'a, T>{
