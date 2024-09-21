@@ -6,14 +6,22 @@
 cpu_early_block:    
     .dword      (1 << BSP)
 
+.global dtb_base
+dtb_base:
+    .dword      0
+
 .section .text.init
 .global _start
 _start:
+    la      t0, dtb_base
+    sd      a1, (t0)
 	csrw	satp, zero
 	csrr	t0, mhartid
     li      t1, BSP
+# Uncomment following line to part all non-bsp cores into inf loop
+    bne     t0, t1, 5f
 # Set non-bsp cores to dead loop
-	bne	t0, t1, 4f
+	bne	    t0, t1, 4f
 
 .option push
 .option norelax

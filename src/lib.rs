@@ -2,6 +2,7 @@
 
 #![allow(unused)]
 #![allow(non_camel_case_types)]
+#![feature(variant_count)]
 
 extern "C" {
     static _heap_start: u8;
@@ -36,7 +37,10 @@ use zone::{zone_type, kmalloc_page, kfree_page};
 use spin::Mutex;
 use vm::{ident_range_map, virt2phys};
 use cpu::{SATP_mode, TrapFrame, irq_mutex, which_cpu};
+use plic::{plic_controller, plic_ctx, extint_map};
 use riscv::register::{mideleg, medeleg};
+use nobsp_kfunc::kinit as nobsp_kinit;
+use nobsp_kfunc::kmain as nobsp_kmain;
 
 #[macro_export]
 macro_rules! print
@@ -145,7 +149,7 @@ fn eh_func_kinit_nobsp() -> usize{
 }
 
 #[no_mangle]
-extern "C"
+pub extern "C"
 fn eh_func_nobsp_kmain(){
     let main_return = nobsp_kmain();
     if let Err(er_code) = main_return{
@@ -169,6 +173,7 @@ pub static SYS_ZONES: [irq_mutex<zone::mem_zone>; 3] = [
 ];
 pub static SYS_UART: irq_mutex<uart::Uart> = irq_mutex::new(uart::Uart::new(0x1000_0000));
 pub static mut KERNEL_TRAP_FRAME: [TrapFrame; 8] = [TrapFrame::new(); 8];
+pub static mut PLIC: plic_controller = plic_controller::new(plic::PLIC_BASE);
 
 
 fn kinit() -> Result<usize, KError> {
@@ -255,15 +260,18 @@ fn kinit() -> Result<usize, KError> {
 
 
     //PLIC
-    ident_range_map(pageroot,
-            extint::PLIC_RNG1_BEGIN,
-            extint::PLIC_RNG1_END,
-            vm::EntryBits::ReadWrite.val());
+    unsafe{
+        ident_range_map(pageroot,
+                PLIC.base,
+                PLIC.base + (plic_ctx::max_ctx() + 2) * 0x1000,
+                vm::EntryBits::ReadWrite.val());
 
-    ident_range_map(pageroot,
-            extint::PLIC_RNG2_BEGIN,
-            extint::PLIC_RNG2_END,
-            vm::EntryBits::ReadWrite.val());
+        ident_range_map(pageroot,
+                PLIC.thres_base,
+                PLIC.thres_base + plic_ctx::max_ctx() * 0x1000,
+                vm::EntryBits::ReadWrite.val());
+    }
+    
 
     let paddr = 0x1000_0000 as usize;
     let vaddr = virt2phys(&pageroot, paddr)?.unwrap_or(0);
@@ -342,6 +350,9 @@ fn kinit() -> Result<usize, KError> {
     
     cpu::sfence_vma();
 
+    /*
+     * Unlock other cores from early spin lock
+     */
     unsafe{
         let early_boot: *mut u64 = ptr::addr_of_mut!(cpu_early_block);
         early_boot.write_volatile(0xffff_ffff);
@@ -350,91 +361,10 @@ fn kinit() -> Result<usize, KError> {
     Ok(0)
 }
 
-fn nobsp_kinit() -> Result<usize, KError> {
-    /* TODO
-     * Setting up nobsp trap frame
-     * Now it is able to running, but any interrupt will cause
-     * store access fault
-     *
-     * Also set up all exception/interrupt delegation into S mode
-     * just like what bsp did
-     */
-
-    let current_cpu = which_cpu();
-
-    println!("CPU#{} is running its nobsp_kinit()", current_cpu);
-
-    let pageroot_ptr = kmem::get_page_table();
-    let mut pageroot = unsafe{pageroot_ptr.as_mut().unwrap()};
-
-    unsafe{
-        cpu::sscratch_write((&mut KERNEL_TRAP_FRAME[0] as *mut TrapFrame) as usize);
-
-        KERNEL_TRAP_FRAME[current_cpu].trap_stack = 
-                kmalloc_page(zone_type::ZONE_NORMAL, 1)?.add(page::PAGE_SIZE);
-
-        ident_range_map(pageroot, 
-                KERNEL_TRAP_FRAME[current_cpu].trap_stack.sub(page::PAGE_SIZE) as usize,
-                KERNEL_TRAP_FRAME[current_cpu].trap_stack as usize,
-                vm::EntryBits::ReadWrite.val());
-
-        let trapstack_paddr = KERNEL_TRAP_FRAME[current_cpu].trap_stack as usize - 1;
-        let trapstack_vaddr = virt2phys(&pageroot, trapstack_paddr)?.unwrap_or(0);
-
-        println!("CPU#{} TrapStack: (vaddr){:#x} -> (paddr){:#x}", 
-                current_cpu,
-                trapstack_paddr, 
-                trapstack_vaddr
-                );
-
-        let trapfram_paddr = ptr::addr_of_mut!(KERNEL_TRAP_FRAME[current_cpu]) as usize;
-        let trapfram_vaddr = virt2phys(&pageroot, trapfram_paddr)?.unwrap_or(0);
-
-        println!("CPU#{} TrapFrame: (vaddr){:#x} -> (paddr){:#x}", 
-                current_cpu,
-                trapfram_paddr, 
-                trapfram_vaddr
-                );
-    }
-
-    cpu::satp_write(SATP_mode::Sv39, 0, pageroot_ptr as usize);
-
-    cpu::mepc_write(eh_func_nobsp_kmain as usize);
-
-    cpu::mstatus_write((1 << 11) | (1 << 5) as usize);
-
-    /*
-     * Now we only consider sw interrupt, timer and external
-     * interrupt will be enabled in future
-     *
-     * We will delegate all interrupt into S-mode, enable S-mode
-     * interrupt, and then disable M-mode interrupt
-     */
-
-    unsafe{
-        mideleg::set_sext();
-        mideleg::set_ssoft();
-        mideleg::set_stimer();
-
-        let all_exception:usize = 0xffffffff;
-        asm!("csrw medeleg, {0}", in(reg) all_exception);
-    }
-
-    cpu::mie_write(0 as usize);
-
-    cpu::sie_write((1 << 3) as usize);
-    
-    cpu::sfence_vma();
-
-    
-    Ok(0)
-}
-
-
 fn kmain() -> Result<(), KError> {
     let current_cpu = which_cpu();;
     println!("CPU#{} Switched to S mode", current_cpu);
-
+    
     unsafe{
         asm!("ebreak");
     }
@@ -453,27 +383,6 @@ fn kmain() -> Result<(), KError> {
     }
 }
 
-fn nobsp_kmain() -> Result<(), KError> {
-    let current_cpu = which_cpu();
-    println!("CPU#{} Switched to S mode", current_cpu);
-
-    unsafe{
-        asm!("ebreak");
-    }
-
-    loop{
-        let ch_ops = SYS_UART.lock().get();
-        match ch_ops {
-            Some(ch) => {
-                println!("{}", ch as char);
-            },
-            None => {}
-        }
-        unsafe{
-            asm!("nop");
-        }
-    }
-}
 
 pub mod uart;
 pub mod zone;
@@ -483,4 +392,5 @@ pub mod vm;
 pub mod kmem;
 pub mod trap;
 pub mod cpu;
-pub mod extint;
+pub mod nobsp_kfunc;
+pub mod plic;

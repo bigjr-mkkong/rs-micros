@@ -9,4 +9,3 @@ crate-type = ["staticlib"]
 [dependencies]
 spin = "0.9.8"
 riscv = "0.11.1"
-plic = "0.0.2"
