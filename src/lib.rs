@@ -32,13 +32,14 @@ extern "C" {
 use core::arch::asm;
 use core::mem::size_of;
 use core::ptr;
+use spin::Mutex;
+use riscv::register::{mideleg, medeleg};
+
 use error::{KError, KErrorType};
 use zone::{zone_type, kmalloc_page, kfree_page};
-use spin::Mutex;
 use vm::{ident_range_map, virt2phys};
 use cpu::{SATP_mode, TrapFrame, irq_mutex, which_cpu};
 use plic::{plic_controller, plic_ctx, extint_map};
-use riscv::register::{mideleg, medeleg};
 use nobsp_kfunc::kinit as nobsp_kinit;
 use nobsp_kfunc::kmain as nobsp_kmain;
 

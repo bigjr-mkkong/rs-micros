@@ -11,12 +11,6 @@ use crate::new_kerror;
 use crate::cpu::{which_cpu, MAX_HARTS, irq_mutex, irq_rwlock};
 
 pub const PLIC_BASE: usize = 0x0c00_0000;
-pub const PLIC_RNG1_BEGIN:usize = 0x0c00_0000;
-pub const PLIC_RNG1_END:usize = 0x0c00_2000;
-
-pub const PLIC_RNG2_BEGIN: usize = 0x0c20_0000;
-pub const PLIC_RNG2_END: usize = 0x1000_0000;
-
 
 
 pub enum extint_map{
@@ -186,7 +180,6 @@ impl plic_controller{
     pub fn complete(&self, ctx: plic_ctx, src: u32) -> Result<(), KError>{
         let usz_ctx = ctx.index() as usize;
         let claim_base = self.thres_base as *mut u32;
-        let mut claimed_int: u32;
 
         unsafe{
             claim_base.add(0x1000 * usz_ctx + 1).write(src);
