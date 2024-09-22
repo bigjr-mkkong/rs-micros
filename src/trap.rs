@@ -1,4 +1,5 @@
 use crate::cpu::TrapFrame;
+use crate::cpu;
 use crate::SYS_UART;
 
 #[no_mangle]
@@ -20,6 +21,10 @@ fn s_trap(xepc: usize,
         match cause_num{
             3 => {
                 println!("Machine SW Interrupt at CPU#{}", hart);
+            },
+            5 =>{
+                cpu::stimecmp_write(cpu::time_read() + 1_000_000);
+                println!("Supervisor Timer Interrupt at CPU#{}", hart);
             },
             7 => {
                 unsafe{

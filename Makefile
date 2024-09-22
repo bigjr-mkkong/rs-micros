@@ -32,7 +32,7 @@ BS_OUT=os.bin
 QEMU=qemu-system-riscv64
 MACH=virt
 CPU=rv64
-CPU_CNT=4
+CPU_CNT=1
 MEM=128M
 DRIVE=hdd.dsk
 

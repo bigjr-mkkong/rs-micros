@@ -1,7 +1,7 @@
 use core::ptr::{null_mut, addr_of};
 use core::arch::asm;
 use core::ops::{Deref, DerefMut};
-use riscv::register::{sie, mstatus};
+use riscv::register::{sie, mie, mstatus};
 use spin::{Mutex, RwLock};
 use crate::_stack_start;
 
@@ -175,6 +175,54 @@ pub fn mhartid_read() -> usize{
     mhartid_val
 }
 
+
+pub fn menvcfg_read() -> u64{
+    let menvcfg_val: u64;
+    unsafe{
+        asm!("csrr {0}, 0x30a", out(reg) menvcfg_val);
+    }
+
+    menvcfg_val
+}
+
+pub fn menvcfg_write(menvcfg_new_val: u64) {
+    unsafe{
+        asm!("csrw 0x30a, {0}", in(reg) menvcfg_new_val);
+    }
+}
+
+pub fn mcounteren_read() -> u64{
+    let mcounteren_val: u64;
+    unsafe{
+        asm!("csrr {0}, mcounteren", out(reg) mcounteren_val);
+    }
+
+    mcounteren_val
+}
+
+pub fn mcounteren_write(mcounteren_new_val: u64) {
+    unsafe{
+        asm!("csrw mcounteren, {0}", in(reg) mcounteren_new_val);
+    }
+}
+
+
+pub fn stimecmp_write(stimecmp_new_val: u64) {
+    unsafe{
+        asm!("csrw stimecmp, {0}", in(reg) stimecmp_new_val);
+    }
+}
+
+
+pub fn time_read() -> u64{
+    let time_val: u64;
+    unsafe{
+        asm!("csrr {0}, time", out(reg) time_val);
+    }
+
+    time_val
+}
+
 pub fn sfence_vma(){
     unsafe{
         asm!("sfence.vma");
@@ -194,16 +242,18 @@ fn which_cpu() -> usize{
 
 }
 
-pub fn cli() {
+pub fn cli(){
     unsafe{
-        asm!("csrci sstatus, (1 << 1)");
+        asm!("csrc  sstatus, {}", in(reg) 1 << 1);
+        // sie::clear_stimer();
     }
 
 }
 
 pub fn sti() {
     unsafe{
-        asm!("csrsi sstatus, (1 << 1)");
+        asm!("csrs  sstatus, {}", in(reg) 1 << 1);
+        // sie::set_stimer();
     }
 }
 
@@ -222,7 +272,7 @@ impl<T> irq_mutex<T> {
         cli();
 
         irq_mutex_guard{
-            dat: self.inner_lock.lock()
+            dat: self.inner_lock.lock(),
         }
     }
 
@@ -235,7 +285,7 @@ pub struct irq_mutex_guard<'a, T> {
 
 impl<T> Drop for irq_mutex_guard<'_, T>{
     fn drop(&mut self) {
-        sti()
+        sti();
     }
 }
 
@@ -270,12 +320,12 @@ impl<T> irq_rwlock<T> {
     }
 
     pub fn write(&self) -> irq_rwlock_writeguard<'_, T> {
-        cli();
+        let prev_sie = cli();
 
         let guard = self.inner_lock.write();
 
         irq_rwlock_writeguard{
-            dat: Some(guard)
+            dat: Some(guard),
         }
     }
 
@@ -286,7 +336,7 @@ impl<T> irq_rwlock<T> {
         let guard = self.inner_lock.read();
 
         irq_rwlock_readguard{
-            dat: guard
+            dat: guard,
         }
     }
 }
@@ -329,4 +379,22 @@ impl <'a, T> Deref for irq_rwlock_readguard<'a, T>{
     fn deref(&self) -> &Self::Target{
         &self.dat
     }
+}
+
+
+
+pub fn timer_init(){
+    unsafe{
+        mie::set_stimer();
+    }
+    
+    menvcfg_write(menvcfg_read() | ((1 as u64) << 63));
+
+    mcounteren_write(mcounteren_read() | 2);
+    
+    boost_timer(1);
+}
+
+pub fn boost_timer(sec: usize){
+    stimecmp_write(time_read() + (sec as u64) * 1_000);
 }

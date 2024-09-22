@@ -33,7 +33,8 @@ use core::arch::asm;
 use core::mem::size_of;
 use core::ptr;
 use spin::Mutex;
-use riscv::register::{mideleg, medeleg};
+use riscv::register::{mideleg, medeleg, sie, sstatus};
+use riscv::delay;
 
 use error::{KError, KErrorType};
 use zone::{zone_type, kmalloc_page, kfree_page};
@@ -286,10 +287,10 @@ fn kinit() -> Result<usize, KError> {
         cpu::sscratch_write((&mut KERNEL_TRAP_FRAME[0] as *mut TrapFrame) as usize);
 
         KERNEL_TRAP_FRAME[current_cpu].trap_stack = 
-                kmalloc_page(zone_type::ZONE_NORMAL, 1)?.add(page::PAGE_SIZE);
+                kmalloc_page(zone_type::ZONE_NORMAL, 2)?.add(page::PAGE_SIZE);
 
         ident_range_map(pageroot, 
-                KERNEL_TRAP_FRAME[current_cpu].trap_stack.sub(page::PAGE_SIZE) as usize,
+                KERNEL_TRAP_FRAME[current_cpu].trap_stack.sub(2 * page::PAGE_SIZE) as usize,
                 KERNEL_TRAP_FRAME[current_cpu].trap_stack as usize,
                 vm::EntryBits::ReadWrite.val());
 
@@ -351,6 +352,8 @@ fn kinit() -> Result<usize, KError> {
     
     cpu::sfence_vma();
 
+    cpu::timer_init();
+
     /*
      * Unlock other cores from early spin lock
      */
@@ -366,20 +369,12 @@ fn kmain() -> Result<(), KError> {
     let current_cpu = which_cpu();;
     println!("CPU#{} Switched to S mode", current_cpu);
     
-    unsafe{
-        asm!("ebreak");
-    }
-
+    let mut i = 1;
     loop{
-        let ch_ops = SYS_UART.lock().get();
-        match ch_ops {
-            Some(ch) => {
-                println!("{}", ch as char);
-            },
-            None => {}
-        }
+        println!("TestMsg {}", i);
+        i += 1;
         unsafe{
-            asm!("nop");
+            asm!("wfi");
         }
     }
 }
