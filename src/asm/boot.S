@@ -18,7 +18,7 @@ _start:
 	csrw	satp, zero
 	csrr	t0, mhartid
     li      t1, BSP
-# Uncomment following line to park all non-bsp cores into inf loop
+# Uncomment following line to part all non-bsp cores into inf loop
     bne     t0, t1, 5f
 # Set non-bsp cores to dead loop
 	bne	    t0, t1, 4f
