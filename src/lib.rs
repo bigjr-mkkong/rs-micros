@@ -33,7 +33,7 @@ use core::arch::asm;
 use core::mem::size_of;
 use core::ptr;
 use spin::Mutex;
-use riscv::register::{mideleg, medeleg};
+use riscv::register::{mstatus, mideleg, medeleg, mie, sie};
 
 use error::{KError, KErrorType};
 use zone::{zone_type, kmalloc_page, kfree_page};
@@ -284,12 +284,13 @@ fn kinit() -> Result<usize, KError> {
      */
     unsafe{
         cpu::sscratch_write((&mut KERNEL_TRAP_FRAME[0] as *mut TrapFrame) as usize);
+        cpu::mscratch_write(cpu::sscratch_read());
 
         KERNEL_TRAP_FRAME[current_cpu].trap_stack = 
-                kmalloc_page(zone_type::ZONE_NORMAL, 1)?.add(page::PAGE_SIZE);
+                kmalloc_page(zone_type::ZONE_NORMAL, 2)?.add(page::PAGE_SIZE);
 
         ident_range_map(pageroot, 
-                KERNEL_TRAP_FRAME[current_cpu].trap_stack.sub(page::PAGE_SIZE) as usize,
+                KERNEL_TRAP_FRAME[current_cpu].trap_stack.sub(2 * page::PAGE_SIZE) as usize,
                 KERNEL_TRAP_FRAME[current_cpu].trap_stack as usize,
                 vm::EntryBits::ReadWrite.val());
 
@@ -323,32 +324,28 @@ fn kinit() -> Result<usize, KError> {
      */
     cpu::mepc_write(eh_func_kmain as usize);
 
-    /*
-     * enable S-mode + MPIE + SPIE
-     */
-    cpu::mstatus_write((1 << 11) | (1 << 5) as usize);
 
     /*
-     * Now we only consider sw interrupt, timer and external
-     * interrupt will be enabled in future
+     * We only delegate ext interrupt and all exception to S-mode
      *
-     * We will delegate all interrupt into S-mode, enable S-mode
-     * interrupt, and then disable M-mode interrupt
+     * timer needs to be handled in M-mode since we need access to CLINT, as well as sw interrupt
      */
 
     unsafe{
         mideleg::set_sext();
-        mideleg::set_ssoft();
-        mideleg::set_stimer();
 
         let all_exception:usize = 0xffffffff;
         asm!("csrw medeleg, {0}", in(reg) all_exception);
+
+        mie::set_mext();
+        mie::set_msoft();
+        mie::set_mtimer();
+
+        mie::set_sext();
+
+        mstatus::set_mpp(mstatus::MPP::Supervisor);
     }
 
-    cpu::mie_write(0 as usize);
-
-    cpu::sie_write((1 << 3) as usize);
-    
     cpu::sfence_vma();
 
     /*

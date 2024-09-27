@@ -43,7 +43,7 @@ _start:
     sub     sp, sp, t0
 
     #enable M-mode and fs = 0b11
-	li		t0, (0b11 << 11) | (0b11 << 13) | (1 << 7) # | (1 << 13)# | (1 << 3)
+	li		t0, (0b11 << 11) | (0b11 << 13) # | (1 << 7) | (1 << 13)# | (1 << 3)
 	csrw	mstatus, t0
 
     #set mepc
@@ -51,8 +51,8 @@ _start:
 	csrw	mepc, t1
 
     #set mtvec
-	# la		t2, m_trap_vector
-	# csrw	mtvec, t2
+	la		t2, m_trap_vector
+	csrw	mtvec, t2
 
     #set stvec
 	la		t2, s_trap_vector
