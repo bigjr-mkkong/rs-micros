@@ -38,10 +38,12 @@ use riscv::register::{mstatus, mideleg, medeleg, mie, sie};
 use error::{KError, KErrorType};
 use zone::{zone_type, kmalloc_page, kfree_page};
 use vm::{ident_range_map, virt2phys};
-use cpu::{SATP_mode, TrapFrame, irq_mutex, which_cpu};
+use cpu::{SATP_mode, TrapFrame, which_cpu};
+use lock::{irq_mutex, irq_rwlock};
 use plic::{plic_controller, plic_ctx, extint_map};
 use nobsp_kfunc::kinit as nobsp_kinit;
 use nobsp_kfunc::kmain as nobsp_kmain;
+use clint::clint_controller;
 
 #[macro_export]
 macro_rules! print
@@ -175,6 +177,7 @@ pub static SYS_ZONES: [irq_mutex<zone::mem_zone>; 3] = [
 pub static SYS_UART: irq_mutex<uart::Uart> = irq_mutex::new(uart::Uart::new(0x1000_0000));
 pub static mut KERNEL_TRAP_FRAME: [TrapFrame; 8] = [TrapFrame::new(); 8];
 pub static mut PLIC: plic_controller = plic_controller::new(plic::PLIC_BASE);
+pub  static mut CLINT: clint_controller = clint_controller::new(clint::CLINT_BASE);
 
 
 fn kinit() -> Result<usize, KError> {
@@ -332,6 +335,7 @@ fn kinit() -> Result<usize, KError> {
      */
 
     unsafe{
+        CLINT.set_mtimecmp(current_cpu, u64::MAX);
         mideleg::set_sext();
 
         let all_exception:usize = 0xffffffff;
@@ -365,16 +369,10 @@ fn kmain() -> Result<(), KError> {
     
     unsafe{
         asm!("ebreak");
+        CLINT.set_mtimecmp(current_cpu, CLINT.read_mtime() + 0x500_000);
     }
 
     loop{
-        let ch_ops = SYS_UART.lock().get();
-        match ch_ops {
-            Some(ch) => {
-                println!("{}", ch as char);
-            },
-            None => {}
-        }
         unsafe{
             asm!("nop");
         }
@@ -392,3 +390,5 @@ pub mod trap;
 pub mod cpu;
 pub mod nobsp_kfunc;
 pub mod plic;
+pub mod lock;
+pub mod clint;

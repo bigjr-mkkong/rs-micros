@@ -9,7 +9,8 @@ use crate::error::{KError, KErrorType};
 use crate::zone::{zone_type, kmalloc_page, kfree_page};
 use crate::page;
 use crate::vm::{ident_range_map, virt2phys};
-use crate::cpu::{SATP_mode, TrapFrame, irq_mutex, which_cpu};
+use crate::cpu::{SATP_mode, TrapFrame, which_cpu};
+use crate::lock::{irq_mutex, irq_rwlock};
 use crate::plic::{plic_controller, plic_ctx, extint_map};
 
 use crate::{kmem,

@@ -1,5 +1,6 @@
 use crate::cpu::TrapFrame;
 use crate::SYS_UART;
+use crate::CLINT;
 
 #[no_mangle]
 extern "C"
@@ -123,8 +124,9 @@ fn m_trap(xepc: usize,
             },
             7 => {
                 println!("Machine Timer Interrupt at CPU#{}", hart);
-                println!("Will Panic for test reason");
-                panic!();
+                unsafe{
+                    CLINT.set_mtimecmp(hart, CLINT.read_mtime() + 0x500_000);
+                }
             },
             11 => {
                 println!("Machine External Interrupt at CPU#{}", hart);

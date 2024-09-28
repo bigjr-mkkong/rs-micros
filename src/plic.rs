@@ -8,7 +8,8 @@ use core::mem::variant_count;
 use crate::SYS_UART;
 use crate::{KError, KErrorType};
 use crate::new_kerror;
-use crate::cpu::{which_cpu, MAX_HARTS, irq_mutex, irq_rwlock};
+use crate::cpu::{which_cpu, MAX_HARTS};
+use crate::lock::{irq_mutex, irq_rwlock};
 
 pub const PLIC_BASE: usize = 0x0c00_0000;
 
