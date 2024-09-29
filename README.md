@@ -23,6 +23,7 @@ To hang qemu before receive gdb client connection
   - [x] Multi-core safety Page Allocator(naive one)
   - [x] VM under S-mode
   - [x] Trap frame
+  - [x] CLINT Timer
 
   **. . .**
 
