@@ -1,6 +1,8 @@
-use crate::cpu::TrapFrame;
+use crate::cpu::{TrapFrame, M_cli, M_sti};
 use crate::SYS_UART;
 use crate::CLINT;
+use crate::SECALL_FRAME;
+use crate::{ecall_args, S2Mop};
 
 #[no_mangle]
 extern "C"
@@ -22,81 +24,16 @@ fn s_trap(xepc: usize,
             3 => {
                 println!("Machine SW Interrupt at CPU#{}", hart);
             },
-            7 => {
-                println!("Machine Timer Interrupt at CPU#{}", hart);
-            },
             11 => {
                 println!("Machine External Interrupt at CPU#{}", hart);
             },
             _ => {
-                panic!("Unhandled async trap on CPU#{}", hart);
+                panic!("S-mode: Unhandled async trap on CPU#{}", hart);
             }
         }
     }else{
-        match cause_num {
-            0 => {
-				println!("Instruction Address Misaligned at CPU#{}\n", hart);
-                panic!();
-            },
-            1 => {
-				println!("Instruction Access Fault at CPU#{}\n", hart);
-                panic!();
-            },
-			2 => {
-				println!("Illegal instruction at CPU#{}\n", hart);
-                panic!();
-			},
-			3 => {
-				println!("Breakpoint Trap at CPU#{}\n", hart);
-                pc_ret += 4;
-			},
-			4 => {
-				println!("Load Address Misaligned at CPU#{}\n", hart);
-                panic!();
-			},
-			5 => {
-				println!("Load Access Fault at CPU#{}\n", hart);
-                panic!();
-			},
-			6 => {
-				println!("Store/AMO Address Misaligned at CPU#{}\n", hart);
-                panic!();
-			},
-			7 => {
-				println!("Store/AMO Access Fault at CPU#{}\n", hart);
-                panic!();
-			},
-			8 => {
-				println!("E-call from User mode at CPU#{}", hart);
-				pc_ret += 4;
-			},
-			9 => {
-				println!("E-call from Supervisor mode at CPU#{}", hart);
-				pc_ret += 4;
-			},
-			11 => {
-				println!("E-call from Machine mode at CPU#{}\n", hart);
-			},
-			12 => {
-				println!("Instruction page fault at CPU#{}", hart);
-			},
-			13 => {
-				println!("Load page fault at CPU#{}", hart);
-			},
-			15 => {
-				println!("Store page fault at CPU#{}", hart);
-				pc_ret += 4;
-			},
-			_ => {
-				println!("Unhandled sync trap at CPU#{}\n", hart);
-                panic!();
-			}
-		}
-        /*
-         * TODO
-         * Implement reg_dump on print trap CSRs
-         */
-        // reg_dump();
+        println!("This exception should not been handled at S-mode");
+        panic!();
     }
 
     pc_ret
@@ -171,6 +108,22 @@ fn m_trap(xepc: usize,
 			},
 			8 => {
 				println!("E-call from User mode at CPU#{}", hart);
+                unsafe{
+                    let opcode = SECALL_FRAME[hart].get_opcode();
+                    match opcode{
+                        S2Mop::CLI => {
+                            let cli_ret = M_cli();
+                            SECALL_FRAME[hart].set_ret(cli_ret);
+                        },
+                        S2Mop::STI => {
+                            let prev_mie = SECALL_FRAME[hart].get_args()[0];
+                            M_sti(prev_mie);
+                        },
+                        S2Mop::UNDEF => {
+                            panic!("Supervisor is tring to call undefined operation");
+                        }
+                    }
+                }
 				pc_ret += 4;
 			},
 			9 => {

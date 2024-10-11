@@ -1,6 +1,6 @@
 use core::ptr::{null_mut, addr_of};
 use core::arch::asm;
-use riscv::register::{sie, mstatus};
+use riscv::register::{sie, sstatus, mstatus};
 use crate::_stack_start;
 
 pub const MAX_HARTS:usize = 4;
@@ -192,16 +192,36 @@ fn which_cpu() -> usize{
 
 }
 
-pub fn cli() {
+pub fn S_cli() -> usize {
+    let mut prev_sie: usize;
     unsafe{
-        asm!("csrci sstatus, (1 << 1)");
+        sstatus::clear_sie();
+        prev_sie = sie_read();
+        sie_write(0);
     }
-
+    prev_sie
 }
 
-pub fn sti() {
+pub fn S_sti(prev_sie: usize) {
     unsafe{
-        asm!("csrsi sstatus, (1 << 1)");
+        sie_write(prev_sie);
+        sstatus::set_sie();
     }
 }
 
+pub fn M_cli() -> usize {
+    let mut prev_mie: usize;
+    unsafe{
+        mstatus::clear_mie();
+        prev_mie = mie_read();
+        mie_write(0);
+    }
+    prev_mie
+}
+
+pub fn M_sti(prev_mie: usize) {
+    unsafe{
+        mie_write(prev_mie);
+        mstatus::set_mie();
+    }
+}

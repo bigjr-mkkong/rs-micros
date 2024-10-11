@@ -9,7 +9,8 @@ use crate::SYS_UART;
 use crate::{KError, KErrorType};
 use crate::new_kerror;
 use crate::cpu::{which_cpu, MAX_HARTS};
-use crate::lock::{irq_mutex, irq_rwlock};
+use crate::lock::spin_mutex;
+use crate::lock::{M_lock, S_lock};
 
 pub const PLIC_BASE: usize = 0x0c00_0000;
 
@@ -73,7 +74,7 @@ pub struct plic_controller{
     pub pend_base: usize,
     pub enable_base: usize,
     pub thres_base: usize,
-    prio: [irq_mutex<u32>; 54],
+    prio: [spin_mutex<u32, M_lock>; 54],
 }
 
 impl plic_controller{
@@ -84,7 +85,7 @@ impl plic_controller{
             pend_base: new_base + 0x1000,
             enable_base: new_base + 0x2000,
             thres_base: new_base + 0x20_0000,
-            prio: [const{irq_mutex::new(0)}; 54],
+            prio: [const{spin_mutex::new(0)}; 54],
         }
     }
 

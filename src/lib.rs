@@ -2,6 +2,7 @@
 
 #![allow(unused)]
 #![allow(non_camel_case_types)]
+#![allow(non_snake_case)]
 #![feature(variant_count)]
 
 extern "C" {
@@ -39,11 +40,13 @@ use error::{KError, KErrorType};
 use zone::{zone_type, kmalloc_page, kfree_page};
 use vm::{ident_range_map, virt2phys};
 use cpu::{SATP_mode, TrapFrame, which_cpu};
-use lock::{irq_mutex, irq_rwlock};
+use crate::lock::spin_mutex;
+use crate::lock::{M_lock, S_lock, ALL_lock};
 use plic::{plic_controller, plic_ctx, extint_map};
 use nobsp_kfunc::kinit as nobsp_kinit;
 use nobsp_kfunc::kmain as nobsp_kmain;
 use clint::clint_controller;
+use ecall::{ecall_args, S2Mop};
 
 #[macro_export]
 macro_rules! print
@@ -170,15 +173,19 @@ fn eh_func_nobsp_kmain(){
 // | |  _| |  | | | |  _ \ / _ \ | |      \ \ / / _ \ | |_) \___ \ 
 // | |_| | |__| |_| | |_) / ___ \| |___    \ V / ___ \|  _ < ___) |
 //  \____|_____\___/|____/_/   \_\_____|    \_/_/   \_\_| \_\____/ 
-pub const zone_defval:irq_mutex<zone::mem_zone> = irq_mutex::new(zone::mem_zone::new());
-pub static SYS_ZONES: [irq_mutex<zone::mem_zone>; 3] = [
-    zone_defval; zone_type::type_cnt()
+pub const ZONE_DEFVAL:spin_mutex<zone::mem_zone, M_lock> =
+    spin_mutex::<zone::mem_zone, M_lock>::new(zone::mem_zone::new());
+
+pub static SYS_ZONES: [spin_mutex<zone::mem_zone, M_lock>; 3] = [
+    ZONE_DEFVAL; zone_type::type_cnt()
 ];
-pub static SYS_UART: irq_mutex<uart::Uart> = irq_mutex::new(uart::Uart::new(0x1000_0000));
+pub static SYS_UART: spin_mutex<uart::Uart, S_lock> =
+    spin_mutex::<uart::Uart, S_lock>::new(uart::Uart::new(0x1000_0000));
+
 pub static mut KERNEL_TRAP_FRAME: [TrapFrame; 8] = [TrapFrame::new(); 8];
 pub static mut PLIC: plic_controller = plic_controller::new(plic::PLIC_BASE);
-pub  static mut CLINT: clint_controller = clint_controller::new(clint::CLINT_BASE);
-
+pub static mut CLINT: clint_controller = clint_controller::new(clint::CLINT_BASE);
+pub static mut SECALL_FRAME: [ecall_args; cpu::MAX_HARTS] = [ecall_args::new(); cpu::MAX_HARTS ];
 
 fn kinit() -> Result<usize, KError> {
     SYS_UART.lock().init();
@@ -336,10 +343,8 @@ fn kinit() -> Result<usize, KError> {
 
     unsafe{
         CLINT.set_mtimecmp(current_cpu, u64::MAX);
+        
         mideleg::set_sext();
-
-        let all_exception:usize = 0xffffffff;
-        asm!("csrw medeleg, {0}", in(reg) all_exception);
 
         mie::set_mext();
         mie::set_msoft();
@@ -368,9 +373,12 @@ fn kmain() -> Result<(), KError> {
     println!("CPU#{} Switched to S mode", current_cpu);
     
     unsafe{
-        asm!("ebreak");
+        asm!("ecall");
+
+        println!("Back from trap\n");
         CLINT.set_mtimecmp(current_cpu, CLINT.read_mtime() + 0x500_000);
     }
+
 
     loop{
         unsafe{
@@ -392,3 +400,4 @@ pub mod nobsp_kfunc;
 pub mod plic;
 pub mod lock;
 pub mod clint;
+pub mod ecall;
