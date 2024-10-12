@@ -1,5 +1,5 @@
 use spin::{Mutex, RwLock};
-use crate::cpu::{M_cli, M_sti, S_cli, S_sti};
+use crate::cpu::{M_cli, M_sti, S_cli, S_sti, get_cpu_mode, Mode, which_cpu};
 use core::ops::{Deref, DerefMut};
 use crate::ecall::{S2Mop, trapping};
 
@@ -34,12 +34,19 @@ impl IntControl for S_lock{
 
 impl IntControl for ALL_lock{
     fn cli() -> usize{
-        let ret = trapping(S2Mop::CLI, &[0 as usize; 5]).unwrap_or(0);
-        ret
+        if let Mode::Machine = get_cpu_mode(which_cpu()){
+            M_cli()
+        }else{
+            trapping(S2Mop::CLI, &[0 as usize; 5]).unwrap_or(0)
+        }
     }
 
     fn sti(prev_xie: usize){
-        trapping(S2Mop::STI, &[prev_xie, 0, 0, 0, 0]);
+        if let Mode::Machine = get_cpu_mode(which_cpu()){
+            M_sti(prev_xie)
+        }else{
+            trapping(S2Mop::STI, &[prev_xie, 0, 0, 0, 0]);
+        }
     }
 }
 

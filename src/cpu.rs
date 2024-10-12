@@ -2,8 +2,48 @@ use core::ptr::{null_mut, addr_of};
 use core::arch::asm;
 use riscv::register::{sie, sstatus, mstatus};
 use crate::_stack_start;
+use crate::KERNEL_TRAP_FRAME;
 
 pub const MAX_HARTS:usize = 4;
+
+
+#[derive(Clone, Copy)]
+pub enum Mode{
+    Machine,
+    Supervisor,
+    User
+}
+
+pub fn set_cpu_mode(new_mode: Mode, hartid: usize){
+    unsafe{
+        KERNEL_TRAP_FRAME[hartid].cur_mode = new_mode;
+    }
+}
+
+pub fn get_cpu_mode(hartid: usize) -> Mode{
+    unsafe{
+        KERNEL_TRAP_FRAME[hartid].cur_mode
+    }
+}
+
+impl From<mstatus::MPP> for Mode{
+    fn from(mpp: mstatus::MPP) -> Self {
+        match mpp {
+            mstatus::MPP::User => Mode::User,
+            mstatus::MPP::Supervisor => Mode::Supervisor,
+            mstatus::MPP::Machine => Mode::Machine,
+        }
+    }
+}
+
+impl From<sstatus::SPP> for Mode{
+    fn from(mpp: sstatus::SPP) -> Self {
+        match mpp {
+            sstatus::SPP::User => Mode::User,
+            sstatus::SPP::Supervisor => Mode::Supervisor,
+        }
+    }
+}
 
 #[derive(Clone, Copy)]
 pub struct TrapFrame{
@@ -12,6 +52,8 @@ pub struct TrapFrame{
     pub satp: usize,
     pub trap_stack: *mut u8,
     pub hartid: usize,
+    pub cur_mode: Mode,
+    pub cpuid: usize
 }
 
 
@@ -22,7 +64,9 @@ impl TrapFrame{
             fregs: [0; 32],
             satp: 0,
             trap_stack: null_mut(),
-            hartid: 0
+            hartid: 0,
+            cur_mode: Mode::Machine,
+            cpuid: 0
         }
     }
 }
@@ -182,13 +226,17 @@ pub fn sfence_vma(){
 #[no_mangle]
 pub extern "C"
 fn which_cpu() -> usize{
-    let sp_val: usize;
-    let stack_base = addr_of!(_stack_start) as usize;
     unsafe{
-        asm!("move {0}, sp", out(reg) sp_val);
+        let TrapPt = sscratch_read() as *const TrapFrame;
+        TrapPt.read().cpuid
     }
+    // let sp_val: usize;
+    // let stack_base = addr_of!(_stack_start) as usize;
+    // unsafe{
+    //     asm!("move {0}, sp", out(reg) sp_val);
+    // }
     
-    ((stack_base - sp_val) / 0x10000) as usize
+    // ((stack_base - sp_val) / 0x10000) as usize
 
 }
 

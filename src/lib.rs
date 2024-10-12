@@ -107,6 +107,12 @@ fn abort() -> ! {
 extern "C"
 fn eh_func_kinit() -> usize{
     let cpuid = cpu::mhartid_read();
+    unsafe{
+        cpu::sscratch_write((&mut KERNEL_TRAP_FRAME[0] as *mut TrapFrame) as usize);
+        cpu::mscratch_write(cpu::sscratch_read());
+        KERNEL_TRAP_FRAME[cpuid].cpuid = cpuid;
+    }
+    cpu::set_cpu_mode(cpu::Mode::Machine, cpuid);
     let init_return = kinit();
     if let Err(er_code) = init_return{
         println!("{}", er_code);
@@ -124,6 +130,8 @@ fn eh_func_kinit() -> usize{
 #[no_mangle]
 extern "C"
 fn eh_func_kmain(){
+    let cpuid = which_cpu();
+    cpu::set_cpu_mode(cpu::Mode::Supervisor, cpuid);
     let main_return = kmain();
     if let Err(er_code) = main_return{
         println!("{}", er_code);
@@ -179,8 +187,8 @@ pub const ZONE_DEFVAL:spin_mutex<zone::mem_zone, M_lock> =
 pub static SYS_ZONES: [spin_mutex<zone::mem_zone, M_lock>; 3] = [
     ZONE_DEFVAL; zone_type::type_cnt()
 ];
-pub static SYS_UART: spin_mutex<uart::Uart, S_lock> =
-    spin_mutex::<uart::Uart, S_lock>::new(uart::Uart::new(0x1000_0000));
+pub static SYS_UART: spin_mutex<uart::Uart, ALL_lock> =
+    spin_mutex::<uart::Uart, ALL_lock>::new(uart::Uart::new(0x1000_0000));
 
 pub static mut KERNEL_TRAP_FRAME: [TrapFrame; 8] = [TrapFrame::new(); 8];
 pub static mut PLIC: plic_controller = plic_controller::new(plic::PLIC_BASE);
@@ -191,6 +199,7 @@ fn kinit() -> Result<usize, KError> {
     SYS_UART.lock().init();
 
     println!("\nHello world");
+
     let current_cpu = cpu::mhartid_read();
     println!("Initializer running on CPU#{}", current_cpu);
 
@@ -293,8 +302,6 @@ fn kinit() -> Result<usize, KError> {
      * Memory allocation for trap stack
      */
     unsafe{
-        cpu::sscratch_write((&mut KERNEL_TRAP_FRAME[0] as *mut TrapFrame) as usize);
-        cpu::mscratch_write(cpu::sscratch_read());
 
         KERNEL_TRAP_FRAME[current_cpu].trap_stack = 
                 kmalloc_page(zone_type::ZONE_NORMAL, 2)?.add(page::PAGE_SIZE);

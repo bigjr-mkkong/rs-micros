@@ -1,8 +1,9 @@
-use crate::cpu::{TrapFrame, M_cli, M_sti};
+use crate::cpu::{TrapFrame, M_cli, M_sti, set_cpu_mode, Mode};
 use crate::SYS_UART;
 use crate::CLINT;
 use crate::SECALL_FRAME;
 use crate::{ecall_args, S2Mop};
+use riscv::register::{mstatus, sstatus, sstatus::SPP, mstatus::MPP};
 
 #[no_mangle]
 extern "C"
@@ -13,6 +14,8 @@ fn s_trap(xepc: usize,
         xstatus: usize,
         frame: &mut TrapFrame) -> usize{
         
+    set_cpu_mode(Mode::Supervisor, hart);
+    let spp:Mode = sstatus::read().spp().into();
 
     let is_async = if xcause >> 63 & 1 == 1 { true } else {false};
 
@@ -36,6 +39,8 @@ fn s_trap(xepc: usize,
         panic!();
     }
 
+    set_cpu_mode(spp, hart);
+
     pc_ret
 }
 
@@ -48,6 +53,8 @@ fn m_trap(xepc: usize,
         xstatus: usize,
         frame: &mut TrapFrame) -> usize{
         
+    set_cpu_mode(Mode::Machine, hart);
+    let mpp:Mode = mstatus::read().mpp().into();
 
     let is_async = if xcause >> 63 & 1 == 1 { true } else {false};
 
@@ -154,6 +161,8 @@ fn m_trap(xepc: usize,
          */
         // reg_dump();
     }
+
+    set_cpu_mode(mpp, hart);
 
     pc_ret
 }
