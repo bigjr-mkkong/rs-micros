@@ -115,6 +115,10 @@ fn m_trap(xepc: usize,
 			},
 			8 => {
 				println!("E-call from User mode at CPU#{}", hart);
+				pc_ret += 4;
+			},
+			9 => {
+				println!("E-call from Supervisor mode at CPU#{}", hart);
                 unsafe{
                     let opcode = SECALL_FRAME[hart].get_opcode();
                     match opcode{
@@ -131,10 +135,6 @@ fn m_trap(xepc: usize,
                         }
                     }
                 }
-				pc_ret += 4;
-			},
-			9 => {
-				println!("E-call from Supervisor mode at CPU#{}", hart);
 				pc_ret += 4;
 			},
 			11 => {

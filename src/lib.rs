@@ -181,14 +181,21 @@ fn eh_func_nobsp_kmain(){
 // | |  _| |  | | | |  _ \ / _ \ | |      \ \ / / _ \ | |_) \___ \ 
 // | |_| | |__| |_| | |_) / ___ \| |___    \ V / ___ \|  _ < ___) |
 //  \____|_____\___/|____/_/   \_\_____|    \_/_/   \_\_| \_\____/ 
-pub const ZONE_DEFVAL:spin_mutex<zone::mem_zone, M_lock> =
-    spin_mutex::<zone::mem_zone, M_lock>::new(zone::mem_zone::new());
+pub const ZONE_DEFVAL:spin_mutex<zone::mem_zone, ALL_lock> =
+    spin_mutex::<zone::mem_zone, ALL_lock>::new(zone::mem_zone::new());
 
-pub static SYS_ZONES: [spin_mutex<zone::mem_zone, M_lock>; 3] = [
+pub static SYS_ZONES: [spin_mutex<zone::mem_zone, ALL_lock>; 3] = [
     ZONE_DEFVAL; zone_type::type_cnt()
 ];
-pub static SYS_UART: spin_mutex<uart::Uart, ALL_lock> =
-    spin_mutex::<uart::Uart, ALL_lock>::new(uart::Uart::new(0x1000_0000));
+
+/*
+ * TODO:
+ * We need to work around uart for lock
+ * We cannot specify uart as ALL_lock
+ * I think we can have two uart, one for M mode and one for S mode
+ */
+pub static SYS_UART: spin_mutex<uart::Uart, S_lock> =
+    spin_mutex::<uart::Uart, S_lock>::new(uart::Uart::new(0x1000_0000));
 
 pub static mut KERNEL_TRAP_FRAME: [TrapFrame; 8] = [TrapFrame::new(); 8];
 pub static mut PLIC: plic_controller = plic_controller::new(plic::PLIC_BASE);
@@ -380,7 +387,7 @@ fn kmain() -> Result<(), KError> {
     println!("CPU#{} Switched to S mode", current_cpu);
     
     unsafe{
-        asm!("ecall");
+        asm!("ebreak");
 
         println!("Back from trap\n");
         CLINT.set_mtimecmp(current_cpu, CLINT.read_mtime() + 0x500_000);
