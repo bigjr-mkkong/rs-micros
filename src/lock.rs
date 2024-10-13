@@ -10,7 +10,7 @@ pub trait IntControl{
 
 pub struct M_lock;
 pub struct S_lock;
-pub struct ALL_lock;
+// pub struct ALL_lock;
 
 impl IntControl for M_lock{
     fn cli() -> usize{
@@ -32,23 +32,23 @@ impl IntControl for S_lock{
     }
 }
 
-impl IntControl for ALL_lock{
-    fn cli() -> usize{
-        if let Mode::Machine = get_cpu_mode(which_cpu()){
-            M_cli()
-        }else{
-            trapping(S2Mop::CLI, &[0 as usize; 5]).unwrap_or(0)
-        }
-    }
+// impl IntControl for ALL_lock{
+//     fn cli() -> usize{
+//         if let Mode::Machine = get_cpu_mode(which_cpu()){
+//             M_cli()
+//         }else{
+//             trapping(S2Mop::CLI, &[0 as usize; 5]).unwrap_or(0)
+//         }
+//     }
 
-    fn sti(prev_xie: usize){
-        if let Mode::Machine = get_cpu_mode(which_cpu()){
-            M_sti(prev_xie)
-        }else{
-            trapping(S2Mop::STI, &[prev_xie, 0, 0, 0, 0]);
-        }
-    }
-}
+//     fn sti(prev_xie: usize){
+//         if let Mode::Machine = get_cpu_mode(which_cpu()){
+//             M_sti(prev_xie)
+//         }else{
+//             trapping(S2Mop::STI, &[prev_xie, 0, 0, 0, 0]);
+//         }
+//     }
+// }
 
 pub struct spin_mutex<T, MODE: IntControl>{
     inner_lock: Mutex<T>,

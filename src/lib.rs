@@ -41,7 +41,7 @@ use zone::{zone_type, kmalloc_page, kfree_page};
 use vm::{ident_range_map, virt2phys};
 use cpu::{SATP_mode, TrapFrame, which_cpu};
 use crate::lock::spin_mutex;
-use crate::lock::{M_lock, S_lock, ALL_lock};
+use crate::lock::{M_lock, S_lock};
 use plic::{plic_controller, plic_ctx, extint_map};
 use nobsp_kfunc::kinit as nobsp_kinit;
 use nobsp_kfunc::kmain as nobsp_kmain;
@@ -108,9 +108,8 @@ extern "C"
 fn eh_func_kinit() -> usize{
     let cpuid = cpu::mhartid_read();
     unsafe{
-        cpu::sscratch_write((&mut KERNEL_TRAP_FRAME[0] as *mut TrapFrame) as usize);
+        cpu::sscratch_write((&mut KERNEL_TRAP_FRAME[cpuid] as *mut TrapFrame) as usize);
         cpu::mscratch_write(cpu::sscratch_read());
-        KERNEL_TRAP_FRAME[cpuid].cpuid = cpuid;
     }
     cpu::set_cpu_mode(cpu::Mode::Machine, cpuid);
     let init_return = kinit();
@@ -148,6 +147,10 @@ fn eh_func_kmain(){
 extern "C"
 fn eh_func_kinit_nobsp() -> usize{
     let cpuid = cpu::mhartid_read();
+    unsafe{
+        cpu::sscratch_write((&mut KERNEL_TRAP_FRAME[cpuid] as *mut TrapFrame) as usize);
+        cpu::mscratch_write(cpu::sscratch_read());
+    }
     let init_return = nobsp_kinit();
     if let Err(er_code) = init_return{
         println!("{}", er_code);
@@ -181,10 +184,10 @@ fn eh_func_nobsp_kmain(){
 // | |  _| |  | | | |  _ \ / _ \ | |      \ \ / / _ \ | |_) \___ \ 
 // | |_| | |__| |_| | |_) / ___ \| |___    \ V / ___ \|  _ < ___) |
 //  \____|_____\___/|____/_/   \_\_____|    \_/_/   \_\_| \_\____/ 
-pub const ZONE_DEFVAL:spin_mutex<zone::mem_zone, ALL_lock> =
-    spin_mutex::<zone::mem_zone, ALL_lock>::new(zone::mem_zone::new());
+pub const ZONE_DEFVAL:spin_mutex<zone::mem_zone, S_lock> =
+    spin_mutex::<zone::mem_zone, S_lock>::new(zone::mem_zone::new());
 
-pub static SYS_ZONES: [spin_mutex<zone::mem_zone, ALL_lock>; 3] = [
+pub static SYS_ZONES: [spin_mutex<zone::mem_zone, S_lock>; 3] = [
     ZONE_DEFVAL; zone_type::type_cnt()
 ];
 
@@ -309,32 +312,35 @@ fn kinit() -> Result<usize, KError> {
      * Memory allocation for trap stack
      */
     unsafe{
+        for cpu_cnt in 0..cpu::MAX_HARTS{
+            KERNEL_TRAP_FRAME[cpu_cnt].cpuid = cpu_cnt;
 
-        KERNEL_TRAP_FRAME[current_cpu].trap_stack = 
-                kmalloc_page(zone_type::ZONE_NORMAL, 2)?.add(page::PAGE_SIZE);
+            KERNEL_TRAP_FRAME[cpu_cnt].trap_stack = 
+                    kmalloc_page(zone_type::ZONE_NORMAL, 2)?.add(page::PAGE_SIZE);
 
-        ident_range_map(pageroot, 
-                KERNEL_TRAP_FRAME[current_cpu].trap_stack.sub(2 * page::PAGE_SIZE) as usize,
-                KERNEL_TRAP_FRAME[current_cpu].trap_stack as usize,
-                vm::EntryBits::ReadWrite.val());
+            ident_range_map(pageroot, 
+                    KERNEL_TRAP_FRAME[cpu_cnt].trap_stack.sub(2 * page::PAGE_SIZE) as usize,
+                    KERNEL_TRAP_FRAME[cpu_cnt].trap_stack as usize,
+                    vm::EntryBits::ReadWrite.val());
 
-        let trapstack_paddr = KERNEL_TRAP_FRAME[current_cpu].trap_stack as usize - 1;
-        let trapstack_vaddr = virt2phys(&pageroot, trapstack_paddr)?.unwrap_or(0);
+            let trapstack_paddr = KERNEL_TRAP_FRAME[cpu_cnt].trap_stack as usize - 1;
+            let trapstack_vaddr = virt2phys(&pageroot, trapstack_paddr)?.unwrap_or(0);
 
-        println!("CPU#{} TrapStack: (vaddr){:#x} -> (paddr){:#x}", 
-                current_cpu,
-                trapstack_paddr, 
-                trapstack_vaddr
-                );
+            println!("CPU#{} TrapStack: (vaddr){:#x} -> (paddr){:#x}", 
+                    cpu_cnt,
+                    trapstack_paddr, 
+                    trapstack_vaddr
+                    );
 
-        let trapfram_paddr = ptr::addr_of_mut!(KERNEL_TRAP_FRAME[current_cpu]) as usize;
-        let trapfram_vaddr = virt2phys(&pageroot, trapfram_paddr)?.unwrap_or(0);
+            let trapfram_paddr = ptr::addr_of_mut!(KERNEL_TRAP_FRAME[cpu_cnt]) as usize;
+            let trapfram_vaddr = virt2phys(&pageroot, trapfram_paddr)?.unwrap_or(0);
 
-        println!("CPU#{} TrapFrame: (vaddr){:#x} -> (paddr){:#x}", 
-                current_cpu,
-                trapfram_paddr, 
-                trapfram_vaddr
-                );
+            println!("CPU#{} TrapFrame: (vaddr){:#x} -> (paddr){:#x}", 
+                    cpu_cnt,
+                    trapfram_paddr, 
+                    trapfram_vaddr
+                    );
+        }
     }
 
     /*

@@ -3,7 +3,7 @@ use core::arch::asm;
 use core::mem::size_of;
 use core::ptr;
 use spin::Mutex;
-use riscv::register::{mideleg, medeleg};
+use riscv::register::{mie, mstatus, mideleg, medeleg};
 
 use crate::error::{KError, KErrorType};
 use crate::zone::{zone_type, kmalloc_page, kfree_page};
@@ -13,6 +13,8 @@ use crate::cpu::{SATP_mode, TrapFrame, which_cpu};
 use crate::lock::spin_mutex;
 use crate::lock::{M_lock, S_lock};
 use crate::plic::{plic_controller, plic_ctx, extint_map};
+use crate::CLINT;
+
 
 use crate::{kmem,
             vm,
@@ -29,33 +31,7 @@ pub fn kinit() -> Result<usize, KError> {
     let mut pageroot = unsafe{pageroot_ptr.as_mut().unwrap()};
 
     unsafe{
-        cpu::sscratch_write((&mut KERNEL_TRAP_FRAME[0] as *mut TrapFrame) as usize);
-
-        KERNEL_TRAP_FRAME[current_cpu].trap_stack = 
-                kmalloc_page(zone_type::ZONE_NORMAL, 1)?.add(page::PAGE_SIZE);
-
-        ident_range_map(pageroot, 
-                KERNEL_TRAP_FRAME[current_cpu].trap_stack.sub(page::PAGE_SIZE) as usize,
-                KERNEL_TRAP_FRAME[current_cpu].trap_stack as usize,
-                vm::EntryBits::ReadWrite.val());
-
-        let trapstack_paddr = KERNEL_TRAP_FRAME[current_cpu].trap_stack as usize - 1;
-        let trapstack_vaddr = virt2phys(&pageroot, trapstack_paddr)?.unwrap_or(0);
-
-        println!("CPU#{} TrapStack: (vaddr){:#x} -> (paddr){:#x}", 
-                current_cpu,
-                trapstack_paddr, 
-                trapstack_vaddr
-                );
-
-        let trapfram_paddr = ptr::addr_of_mut!(KERNEL_TRAP_FRAME[current_cpu]) as usize;
-        let trapfram_vaddr = virt2phys(&pageroot, trapfram_paddr)?.unwrap_or(0);
-
-        println!("CPU#{} TrapFrame: (vaddr){:#x} -> (paddr){:#x}", 
-                current_cpu,
-                trapfram_paddr, 
-                trapfram_vaddr
-                );
+        cpu::sscratch_write((&mut KERNEL_TRAP_FRAME[current_cpu] as *mut TrapFrame) as usize);
     }
 
     cpu::satp_write(SATP_mode::Sv39, 0, pageroot_ptr as usize);
@@ -73,17 +49,18 @@ pub fn kinit() -> Result<usize, KError> {
      */
 
     unsafe{
+        CLINT.set_mtimecmp(current_cpu, u64::MAX);
+        
         mideleg::set_sext();
-        mideleg::set_ssoft();
-        mideleg::set_stimer();
 
-        let all_exception:usize = 0xffffffff;
-        asm!("csrw medeleg, {0}", in(reg) all_exception);
+        mie::set_mext();
+        mie::set_msoft();
+        mie::set_mtimer();
+
+        mie::set_sext();
+
+        mstatus::set_mpp(mstatus::MPP::Supervisor);
     }
-
-    cpu::mie_write(0 as usize);
-
-    cpu::sie_write((1 << 3) as usize);
     
     cpu::sfence_vma();
 
@@ -100,13 +77,6 @@ pub fn kmain() -> Result<(), KError> {
     }
 
     loop{
-        let ch_ops = SYS_UART.lock().get();
-        match ch_ops {
-            Some(ch) => {
-                println!("{}", ch as char);
-            },
-            None => {}
-        }
         unsafe{
             asm!("nop");
         }

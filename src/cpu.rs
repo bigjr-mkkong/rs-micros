@@ -53,7 +53,7 @@ pub struct TrapFrame{
     pub trap_stack: *mut u8,
     pub hartid: usize,
     pub cur_mode: Mode,
-    pub cpuid: usize
+    pub cpuid: usize,
 }
 
 
@@ -66,7 +66,7 @@ impl TrapFrame{
             trap_stack: null_mut(),
             hartid: 0,
             cur_mode: Mode::Machine,
-            cpuid: 0
+            cpuid: 0,
         }
     }
 }
