@@ -1,5 +1,5 @@
 use core::fmt;
-use crate::SYS_UART;
+use crate::{M_UART, S_UART};
 
 #[macro_export]
 macro_rules! new_kerror{

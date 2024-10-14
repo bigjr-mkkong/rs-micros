@@ -5,7 +5,7 @@
 
 use core::mem::variant_count;
 
-use crate::SYS_UART;
+use crate::{S_UART, M_UART};
 use crate::{KError, KErrorType};
 use crate::new_kerror;
 use crate::cpu::{which_cpu, MAX_HARTS};

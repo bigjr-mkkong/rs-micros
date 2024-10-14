@@ -19,7 +19,8 @@ use crate::CLINT;
 use crate::{kmem,
             vm,
             cpu,
-            SYS_UART,
+            S_UART,
+            M_UART,
             KERNEL_TRAP_FRAME,};
 
 pub fn kinit() -> Result<usize, KError> {

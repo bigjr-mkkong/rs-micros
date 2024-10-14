@@ -34,12 +34,12 @@ use core::arch::asm;
 use core::mem::size_of;
 use core::ptr;
 use spin::Mutex;
-use riscv::register::{mstatus, mideleg, medeleg, mie, sie};
+use riscv::register::{sstatus, mstatus, mideleg, medeleg, mie, sie};
 
 use error::{KError, KErrorType};
 use zone::{zone_type, kmalloc_page, kfree_page};
 use vm::{ident_range_map, virt2phys};
-use cpu::{SATP_mode, TrapFrame, which_cpu};
+use cpu::{SATP_mode, TrapFrame, which_cpu, get_cpu_mode};
 use crate::lock::spin_mutex;
 use crate::lock::{M_lock, S_lock};
 use plic::{plic_controller, plic_ctx, extint_map};
@@ -53,7 +53,12 @@ macro_rules! print
 {
     ($($args:tt)+) => ({
         use core::fmt::Write;
-        let _ = write!(SYS_UART.lock(), $($args)+);
+        use crate::cpu;
+        if let cpu::Mode::Machine = cpu::get_cpu_mode(cpu::which_cpu()) {
+            let _ = write!(M_UART.lock(), $($args)+);
+        }else{
+            let _ = write!(S_UART.lock(), $($args)+);
+        }
     });
 }
 
@@ -197,7 +202,13 @@ pub static SYS_ZONES: [spin_mutex<zone::mem_zone, S_lock>; 3] = [
  * We cannot specify uart as ALL_lock
  * I think we can have two uart, one for M mode and one for S mode
  */
-pub static SYS_UART: spin_mutex<uart::Uart, S_lock> =
+// pub static SYS_UART: spin_mutex<uart::Uart, S_lock> =
+//     spin_mutex::<uart::Uart, S_lock>::new(uart::Uart::new(0x1000_0000));
+
+pub static M_UART: spin_mutex<uart::Uart, M_lock> =
+    spin_mutex::<uart::Uart, M_lock>::new(uart::Uart::new(0x1000_0000));
+
+pub static S_UART: spin_mutex<uart::Uart, S_lock> =
     spin_mutex::<uart::Uart, S_lock>::new(uart::Uart::new(0x1000_0000));
 
 pub static mut KERNEL_TRAP_FRAME: [TrapFrame; 8] = [TrapFrame::new(); 8];
@@ -206,8 +217,8 @@ pub static mut CLINT: clint_controller = clint_controller::new(clint::CLINT_BASE
 pub static mut SECALL_FRAME: [ecall_args; cpu::MAX_HARTS] = [ecall_args::new(); cpu::MAX_HARTS ];
 
 fn kinit() -> Result<usize, KError> {
-    SYS_UART.lock().init();
-
+    M_UART.lock().init();
+    S_UART.lock().init();
     println!("\nHello world");
 
     let current_cpu = cpu::mhartid_read();
@@ -363,14 +374,18 @@ fn kinit() -> Result<usize, KError> {
 
     unsafe{
         CLINT.set_mtimecmp(current_cpu, u64::MAX);
-        
-        mideleg::set_sext();
 
-        mie::set_mext();
         mie::set_msoft();
+
         mie::set_mtimer();
 
-        mie::set_sext();
+        // mie::set_mext();
+        // mie::set_sext();
+        // sstatus::set_sie();
+        // sie::set_sext();
+        // mideleg::set_sext();
+        PLIC.set_prio(extint_map::UART0_SENDRECV, 5)?;
+        PLIC.enable(plic_ctx::CORE0_M, extint_map::UART0_SENDRECV)?;
 
         mstatus::set_mpp(mstatus::MPP::Supervisor);
     }

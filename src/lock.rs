@@ -14,11 +14,12 @@ pub struct S_lock;
 
 impl IntControl for M_lock{
     fn cli() -> usize{
-        M_cli()
+        // M_cli()
+        0
     }
 
     fn sti(prev_xie: usize){
-        M_sti(prev_xie)
+        // M_sti(prev_xie)
     }
 }
 

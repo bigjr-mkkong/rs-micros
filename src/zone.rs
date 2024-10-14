@@ -1,7 +1,7 @@
 use core::mem;
 use core::array;
 
-use crate::SYS_UART;
+use crate::{M_UART, S_UART};
 use crate::SYS_ZONES;
 use crate::error::{KError, KErrorType};
 use crate::new_kerror;

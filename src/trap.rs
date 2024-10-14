@@ -1,5 +1,5 @@
 use crate::cpu::{TrapFrame, M_cli, M_sti, set_cpu_mode, Mode};
-use crate::SYS_UART;
+use crate::{M_UART, S_UART};
 use crate::CLINT;
 use crate::SECALL_FRAME;
 use crate::{ecall_args, S2Mop};

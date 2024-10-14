@@ -4,7 +4,7 @@ use core::array;
 
 use crate::zone;
 use crate::zone::page_allocator;
-use crate::SYS_UART;
+use crate::{M_UART, S_UART};
 // use crate::sys_uart;
 
 use crate::error::{KError, KErrorType};

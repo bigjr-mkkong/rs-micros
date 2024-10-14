@@ -3,11 +3,6 @@
 .global s_trap_vector
 .global m_trap_vector
 s_trap_vector:
-
-# Disable interrupt
-    csrci   sstatus, (1 << 1)
-
-
 #KERNEL_TRAP_FRAME addr is inside mscratch
     csrrw   t0, sscratch, t0
 
@@ -168,8 +163,6 @@ s_trap_vector:
 
     csrrw   t0, sscratch, t0
 
-    csrsi   sstatus, (1 << 1)
-
     sret
 
 
@@ -184,9 +177,6 @@ s_trap_vector:
 # Like, irq_save before ecall and irq_restore after ecall
 # Pagefault needs more thinking, but lets defer that one
 m_trap_vector:
-# Disable interrupt
-    csrci   mstatus, (1 << 3)
-
 #KERNEL_TRAP_FRAME addr is inside mscratch
     csrrw   s1, mscratch, s1
 
@@ -273,7 +263,5 @@ m_trap_vector:
     ld      x31, 30 * 8(s1)
 
     csrrw   s1, mscratch, s1
-
-    csrsi   mstatus, (1 << 3)
 
     mret

@@ -1,6 +1,6 @@
 use crate::error::{KError, KErrorType};
 use crate::new_kerror;
-use crate::SYS_UART;
+use crate::{M_UART, S_UART};
 use crate::zone::{zone_type, kmalloc_page, kfree_page};
 use crate::{aligh_4k, aligl_4k};
 use crate::page;
