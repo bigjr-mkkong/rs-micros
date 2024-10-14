@@ -90,9 +90,13 @@ _start:
     and     t2, t2, t1
     beqz    t2, 7b
 
-    la      t2, s_trap_vector
-    csrw    mtvec, t2
-    csrw    stvec, t2
+    #set mtvec
+	la		t2, m_trap_vector
+	csrw	mtvec, t2
+
+    #set stvec
+	la		t2, s_trap_vector
+	csrw	stvec, t2
 
     li      t0, 0b11 << 11 | (0b11 << 13) | (1 << 7)
     csrw    mstatus, t0

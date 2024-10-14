@@ -410,8 +410,8 @@ fn kmain() -> Result<(), KError> {
     unsafe{
         asm!("ebreak");
 
-        println!("Back from trap\n");
-        CLINT.set_mtimecmp(current_cpu, CLINT.read_mtime() + 0x500_000);
+        println!("CPU{} Back from trap\n", current_cpu);
+        // CLINT.set_mtimecmp(current_cpu, CLINT.read_mtime() + 0x500_000);
     }
 
 

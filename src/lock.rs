@@ -2,6 +2,7 @@ use spin::{Mutex, RwLock};
 use crate::cpu::{M_cli, M_sti, S_cli, S_sti, get_cpu_mode, Mode, which_cpu};
 use core::ops::{Deref, DerefMut};
 use crate::ecall::{S2Mop, trapping};
+use crate::{S_UART, M_UART};
 
 pub trait IntControl{
     fn cli() -> usize;

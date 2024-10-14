@@ -51,14 +51,16 @@ pub fn kinit() -> Result<usize, KError> {
 
     unsafe{
         CLINT.set_mtimecmp(current_cpu, u64::MAX);
-        
-        mideleg::set_sext();
 
-        mie::set_mext();
         mie::set_msoft();
+
         mie::set_mtimer();
 
-        mie::set_sext();
+        // mie::set_mext();
+        // mie::set_sext();
+        // sstatus::set_sie();
+        // sie::set_sext();
+        // mideleg::set_sext();
 
         mstatus::set_mpp(mstatus::MPP::Supervisor);
     }
@@ -75,6 +77,9 @@ pub fn kmain() -> Result<(), KError> {
 
     unsafe{
         asm!("ebreak");
+        println!("CPU{} Back from trap\n", current_cpu);
+
+        CLINT.set_mtimecmp(current_cpu, CLINT.read_mtime() + 0x500_000);
     }
 
     loop{
