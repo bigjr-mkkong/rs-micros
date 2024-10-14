@@ -1,8 +1,9 @@
 use crate::cpu::{TrapFrame, M_cli, M_sti, set_cpu_mode, Mode};
 use crate::{M_UART, S_UART};
-use crate::CLINT;
+use crate::{CLINT, PLIC};
 use crate::SECALL_FRAME;
 use crate::{ecall_args, S2Mop};
+use crate::plic;
 use riscv::register;
 use riscv::register::{mstatus, sstatus, sstatus::SPP, mstatus::MPP};
 
@@ -75,8 +76,19 @@ fn m_trap(xepc: usize,
                 }
             },
             11 => {
-                println!("Machine External Interrupt at CPU#{}", hart);
-                panic!("Panic for test reason...");
+                unsafe{
+                    let extint_id = PLIC.claim(plic::plic_ctx::CORE0_M).unwrap_or(60);
+                    println!("Extint#{} handled by CPU#{}", extint_id, hart);
+                    match extint_id{
+                        10 => {
+                            M_UART.lock().get().unwrap();
+                        },
+                        _ => {
+                            println!("Unsupported extint: #{} on CPU#{}", extint_id, hart);
+                        }
+                    }
+                    PLIC.complete(plic::plic_ctx::CORE0_M, extint_id);
+                }
             },
             _ => {
                 panic!("Unhandled async trap on CPU#{}", hart);

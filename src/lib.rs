@@ -386,8 +386,6 @@ fn kinit() -> Result<usize, KError> {
         // mideleg::set_sext();
         PLIC.set_prio(extint_map::UART0, 5)?;
         PLIC.enable(plic_ctx::CORE0_M, extint_map::UART0)?;
-        PLIC.set_prio(extint_map::UART1, 5)?;
-        PLIC.enable(plic_ctx::CORE0_M, extint_map::UART1)?;
 
         mstatus::set_mpp(mstatus::MPP::Supervisor);
     }

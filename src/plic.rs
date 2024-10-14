@@ -161,7 +161,7 @@ impl plic_controller{
         let thres_base = self.thres_base as *mut u32;
 
         unsafe{
-            thres_base.add(usz_ctx * 0x1000).write(new_thres);
+            thres_base.add(usz_ctx * 0x1000).write_volatile(new_thres);
         }
 
         Ok(())
@@ -173,7 +173,7 @@ impl plic_controller{
         let mut claimed_int: u32;
 
         unsafe{
-            claimed_int = claim_base.add(0x1000 * usz_ctx + 1).read();
+            claimed_int = claim_base.add(0x1000 * usz_ctx + 1).read_volatile();
         }
 
         Ok(claimed_int)
