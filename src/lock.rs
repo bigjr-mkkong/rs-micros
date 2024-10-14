@@ -1,3 +1,4 @@
+use core::arch::asm;
 use spin::{Mutex, RwLock};
 use crate::cpu::{M_cli, M_sti, S_cli, S_sti, get_cpu_mode, Mode, which_cpu};
 use core::ops::{Deref, DerefMut};

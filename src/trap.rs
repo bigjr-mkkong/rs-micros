@@ -3,6 +3,7 @@ use crate::{M_UART, S_UART};
 use crate::CLINT;
 use crate::SECALL_FRAME;
 use crate::{ecall_args, S2Mop};
+use riscv::register;
 use riscv::register::{mstatus, sstatus, sstatus::SPP, mstatus::MPP};
 
 #[no_mangle]
@@ -25,10 +26,11 @@ fn s_trap(xepc: usize,
     if is_async{
         match cause_num{
             3 => {
-                println!("Machine SW Interrupt at CPU#{}", hart);
+                println!("Supervisor: SW Interrupt at CPU#{}", hart);
             },
             11 => {
-                println!("Machine External Interrupt at CPU#{}", hart);
+                println!("Supervisor: External Interrupt at CPU#{}", hart);
+                panic!("Panic for test reason...");
             },
             _ => {
                 panic!("S-mode: Unhandled async trap on CPU#{}", hart);
@@ -74,6 +76,7 @@ fn m_trap(xepc: usize,
             },
             11 => {
                 println!("Machine External Interrupt at CPU#{}", hart);
+                panic!("Panic for test reason...");
             },
             _ => {
                 panic!("Unhandled async trap on CPU#{}", hart);

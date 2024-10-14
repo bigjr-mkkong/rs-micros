@@ -98,7 +98,7 @@ _start:
 	la		t2, s_trap_vector
 	csrw	stvec, t2
 
-    li      t0, 0b11 << 11 | (0b11 << 13) | (1 << 7)
+    li      t0, 0b11 << 11 | (0b11 << 13)
     csrw    mstatus, t0
 
     la      t1, eh_func_kinit_nobsp

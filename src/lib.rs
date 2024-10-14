@@ -379,13 +379,15 @@ fn kinit() -> Result<usize, KError> {
 
         mie::set_mtimer();
 
-        // mie::set_mext();
-        // mie::set_sext();
-        // sstatus::set_sie();
-        // sie::set_sext();
+        mie::set_mext();
+        mie::set_sext();
+        sstatus::set_spie();
+        sie::set_sext();
         // mideleg::set_sext();
-        PLIC.set_prio(extint_map::UART0_SENDRECV, 5)?;
-        PLIC.enable(plic_ctx::CORE0_M, extint_map::UART0_SENDRECV)?;
+        PLIC.set_prio(extint_map::UART0, 5)?;
+        PLIC.enable(plic_ctx::CORE0_M, extint_map::UART0)?;
+        PLIC.set_prio(extint_map::UART1, 5)?;
+        PLIC.enable(plic_ctx::CORE0_M, extint_map::UART1)?;
 
         mstatus::set_mpp(mstatus::MPP::Supervisor);
     }
@@ -408,10 +410,10 @@ fn kmain() -> Result<(), KError> {
     println!("CPU#{} Switched to S mode", current_cpu);
     
     unsafe{
-        asm!("ebreak");
+        // asm!("ebreak");
 
-        println!("CPU{} Back from trap\n", current_cpu);
-        // CLINT.set_mtimecmp(current_cpu, CLINT.read_mtime() + 0x500_000);
+        // println!("CPU{} Back from trap\n", current_cpu);
+        CLINT.set_mtimecmp(current_cpu, CLINT.read_mtime() + 0x500_000);
     }
 
 

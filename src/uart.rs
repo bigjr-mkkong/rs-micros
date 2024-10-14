@@ -1,4 +1,5 @@
 use core::convert::TryInto;
+use crate::{S_UART, M_UART};
 use core::fmt::{Error, Write};
 use spin::Mutex;
 

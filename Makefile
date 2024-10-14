@@ -29,6 +29,8 @@ BS_OUT=os.bin
 #| |_| | | |___  | |  | | | |_| |
 # \__\_\ |_____| |_|  |_|  \___/ 
                                 
+# use `ctrl+a c` to enter qemu monitor
+
 QEMU=qemu-system-riscv64
 MACH=virt
 CPU=rv64
