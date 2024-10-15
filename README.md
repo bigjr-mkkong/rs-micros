@@ -24,14 +24,14 @@ To hang qemu before receive gdb client connection
   - [x] VM under S-mode
   - [x] Trap frame
   - [x] CLINT Timer
-  - [x] PLIC (partially works) 
+  - [x] PLIC 
 
   **. . .**
 
 ## TODO
 There are many TODOs in src code, but here are some general things:
-  - [ ] ISA abstraction(Use `riscv` crate replace most inline asm)
-  - [ ] Proper logging system for multi-core
+  - [x] ISA abstraction(Use `riscv` crate replace most inline asm)
+  - [x] Proper logging system for multi-core
   - [ ] CPU dumper inside trap code
   - [ ] `fsd` and `fld` would report illegal instruction error
-  - [ ] Slub allocator on kheap
+  - [ ] Slub(or any kinds of small object allocator) allocator for kheap
