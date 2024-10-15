@@ -17,22 +17,12 @@ pub const PLIC_BASE: usize = 0x0c00_0000;
 
 pub enum extint_map{
     UART0,
-    UART1,
-    I2C,
-    QSPI0,
-    QSPI1,
-    ETHERNET
 }
 
 impl extint_map{
-    fn id(&self) -> u32{
+    pub const fn id(&self) -> u32{
         let val:u32 = match self{
             extint_map::UART0 => 10,
-            extint_map::UART1 => 5,
-            extint_map::I2C => 50,
-            extint_map::QSPI0 => 51,
-            extint_map::QSPI1 => 52,
-            extint_map::ETHERNET => 53
         };
 
         val
