@@ -4,6 +4,7 @@ use crate::{CLINT, PLIC};
 use crate::SECALL_FRAME;
 use crate::{ecall_args, S2Mop};
 use crate::plic;
+use crate::EXTINT_SRCS;
 use riscv::register;
 use riscv::register::{mstatus, sstatus, sstatus::SPP, mstatus::MPP};
 
@@ -77,11 +78,15 @@ fn m_trap(xepc: usize,
             },
             11 => {
                 unsafe{
+                    let current_ctx = plic::id2plic_ctx(hart);
                     let extint_id = PLIC.claim(plic::plic_ctx::CORE0_M).unwrap_or(60);
-                    println!("Extint#{} handled by CPU#{}", extint_id, hart);
                     match extint_id{
                         10 => {
-                            M_UART.lock().get().unwrap();
+                            let ch = M_UART.lock().get().unwrap();
+                            println!("Uart extint: {}", ch as char);
+                        },
+                        0 => {
+                            //do nothing when 0
                         },
                         _ => {
                             println!("Unsupported extint: #{} on CPU#{}", extint_id, hart);

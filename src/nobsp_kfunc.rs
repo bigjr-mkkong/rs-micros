@@ -12,7 +12,7 @@ use crate::vm::{ident_range_map, virt2phys};
 use crate::cpu::{SATP_mode, TrapFrame, which_cpu};
 use crate::lock::spin_mutex;
 use crate::lock::{M_lock, S_lock};
-use crate::plic::{plic_controller, plic_ctx, extint_map};
+use crate::plic::{plic_controller, plic_ctx, extint_src, extint_name};
 use crate::CLINT;
 
 

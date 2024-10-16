@@ -8,26 +8,54 @@ use core::mem::variant_count;
 use crate::{S_UART, M_UART};
 use crate::{KError, KErrorType};
 use crate::new_kerror;
-use crate::cpu::{which_cpu, MAX_HARTS};
+use crate::cpu::{which_cpu, MAX_HARTS, get_cpu_mode, Mode};
 use crate::lock::spin_mutex;
 use crate::lock::{M_lock, S_lock};
+use spin::Mutex;
 
 pub const PLIC_BASE: usize = 0x0c00_0000;
+pub const MAX_INTCNT: usize = 53;
 
 
-pub enum extint_map{
+#[derive(Clone, Copy)]
+pub enum extint_name{
+    UNDEF,
     UART0,
 }
 
-impl extint_map{
-    pub const fn id(&self) -> u32{
-        let val:u32 = match self{
-            extint_map::UART0 => 10,
-        };
+#[derive(Clone, Copy)]
+pub struct extint_src{
+    name: extint_name,
+    src_id: usize,
+    prio: usize
+}
 
-        val
+impl extint_src{
+    pub const fn new() -> Self{
+        extint_src{
+            name: extint_name::UNDEF,
+            src_id: 0,
+            prio: 0
+        }
+    }
+
+    pub fn get_name(&self) -> extint_name{
+        self.name.clone()
+    }
+
+    pub fn get_id(&self) -> usize{
+        self.src_id
+    }
+
+    pub fn set_name(&mut self, new_name:extint_name){
+        self.name = new_name;
+    }
+
+    pub fn set_id(&mut self, new_id: usize){
+        self.src_id = new_id;
     }
 }
+
 
 pub enum plic_ctx{
     CORE0_M,
@@ -79,12 +107,12 @@ impl plic_controller{
         }
     }
 
-    pub fn set_prio(&mut self, src:extint_map, new_prio: u32) -> Result<(), KError>{
+    pub fn set_prio(&mut self, src:&extint_src, new_prio: u32) -> Result<(), KError>{
         if new_prio > 7{
             return Err(new_kerror!(KErrorType::EINVAL));
         }
 
-        let usz_src = src.id() as usize;
+        let usz_src = src.get_id();
         *self.prio[usz_src].lock() = new_prio;
 
         unsafe{
@@ -95,8 +123,8 @@ impl plic_controller{
         Ok(())
     }
 
-    pub fn get_prio(self, src:extint_map) -> Result<u32, KError>{
-        let usz_src = src.id() as usize;
+    pub fn get_prio(self, src:&extint_src) -> Result<u32, KError>{
+        let usz_src = src.get_id();
         let reg_val = *self.prio[usz_src].lock();
 
         let mut mmio_val: u32;
@@ -112,8 +140,8 @@ impl plic_controller{
         }
     }
 
-    pub fn get_pending(&self, src:extint_map) -> Result<bool, KError>{
-        let usz_src = src.id() as usize;
+    pub fn get_pending(&self, src:&extint_src) -> Result<bool, KError>{
+        let usz_src = src.get_id();
         unsafe{
             let pend_pt = self.pend_base as *mut u32;
             
@@ -129,10 +157,10 @@ impl plic_controller{
     }
 
     
-    pub fn enable(&self, ctx: plic_ctx, src: extint_map) -> Result<(), KError>{
+    pub fn enable(&self, ctx: plic_ctx, src:&extint_src) -> Result<(), KError>{
         let usz_ctx = ctx.index() as usize;
-        let usz_src:usize = src.id() as usize / 32;
-        let mask:u32 = (1 << (src.id() % 32));
+        let usz_src:usize = src.get_id() / 32;
+        let mask:u32 = (1 << (src.get_id() % 32));
         unsafe{
             let enable_pt = (self.enable_base + (usz_ctx * 32 + usz_src)) as *mut u32;
             let mut enable_reg:u32 = enable_pt.read();
@@ -182,3 +210,10 @@ impl plic_controller{
 }
 
 
+pub fn id2plic_ctx(hartid: usize) -> plic_ctx{
+    if let Mode::Machine = get_cpu_mode(hartid){
+        plic_ctx::CORE0_M
+    }else{
+        plic_ctx::CORE1_S
+    }
+}

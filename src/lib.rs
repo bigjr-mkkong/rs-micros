@@ -42,7 +42,7 @@ use vm::{ident_range_map, virt2phys};
 use cpu::{SATP_mode, TrapFrame, which_cpu, get_cpu_mode};
 use crate::lock::spin_mutex;
 use crate::lock::{M_lock, S_lock};
-use plic::{plic_controller, plic_ctx, extint_map};
+use plic::{plic_controller, plic_ctx, extint_src, extint_name};
 use nobsp_kfunc::kinit as nobsp_kinit;
 use nobsp_kfunc::kmain as nobsp_kmain;
 use clint::clint_controller;
@@ -196,15 +196,6 @@ pub static SYS_ZONES: [spin_mutex<zone::mem_zone, S_lock>; 3] = [
     ZONE_DEFVAL; zone_type::type_cnt()
 ];
 
-/*
- * TODO:
- * We need to work around uart for lock
- * We cannot specify uart as ALL_lock
- * I think we can have two uart, one for M mode and one for S mode
- */
-// pub static SYS_UART: spin_mutex<uart::Uart, S_lock> =
-//     spin_mutex::<uart::Uart, S_lock>::new(uart::Uart::new(0x1000_0000));
-
 pub static M_UART: spin_mutex<uart::Uart, M_lock> =
     spin_mutex::<uart::Uart, M_lock>::new(uart::Uart::new(0x1000_0000));
 
@@ -215,6 +206,12 @@ pub static mut KERNEL_TRAP_FRAME: [TrapFrame; 8] = [TrapFrame::new(); 8];
 pub static mut PLIC: plic_controller = plic_controller::new(plic::PLIC_BASE);
 pub static mut CLINT: clint_controller = clint_controller::new(clint::CLINT_BASE);
 pub static mut SECALL_FRAME: [ecall_args; cpu::MAX_HARTS] = [ecall_args::new(); cpu::MAX_HARTS ];
+
+/*
+ * TODO:
+ * Lets wait Hubert's works bring no_std::vec here
+ */
+pub static mut EXTINT_SRCS: [extint_src; plic::MAX_INTCNT] = [extint_src::new(); plic::MAX_INTCNT];
 
 fn kinit() -> Result<usize, KError> {
     M_UART.lock().init();
@@ -383,9 +380,15 @@ fn kinit() -> Result<usize, KError> {
         mie::set_sext();
         sstatus::set_spie();
         sie::set_sext();
-        // mideleg::set_sext();
-        PLIC.set_prio(extint_map::UART0, 5)?;
-        PLIC.enable(plic_ctx::CORE0_M, extint_map::UART0)?;
+        
+
+        /* TODO:
+         * Get rid this ugly written code and replace with fancy vector
+         */
+        EXTINT_SRCS[10].set_name(extint_name::UART0);
+        EXTINT_SRCS[10].set_id(10);
+        PLIC.set_prio(&EXTINT_SRCS[10], 5)?;
+        PLIC.enable(plic_ctx::CORE0_M, &EXTINT_SRCS[10])?;
 
         mstatus::set_mpp(mstatus::MPP::Supervisor);
     }
