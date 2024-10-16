@@ -439,3 +439,4 @@ pub mod plic;
 pub mod lock;
 pub mod clint;
 pub mod ecall;
+pub mod allocator;

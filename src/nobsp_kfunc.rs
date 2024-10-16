@@ -3,7 +3,7 @@ use core::arch::asm;
 use core::mem::size_of;
 use core::ptr;
 use spin::Mutex;
-use riscv::register::{mie, mstatus, mideleg, medeleg};
+use riscv::register::{mie, mstatus, mideleg, medeleg, sstatus, sie};
 
 use crate::error::{KError, KErrorType};
 use crate::zone::{zone_type, kmalloc_page, kfree_page};
@@ -56,11 +56,10 @@ pub fn kinit() -> Result<usize, KError> {
 
         mie::set_mtimer();
 
-        // mie::set_mext();
-        // mie::set_sext();
-        // sstatus::set_sie();
-        // sie::set_sext();
-        // mideleg::set_sext();
+        mie::set_mext();
+        mie::set_sext();
+        sstatus::set_spie();
+        sie::set_sext();
 
         mstatus::set_mpp(mstatus::MPP::Supervisor);
     }
