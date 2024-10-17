@@ -3,7 +3,7 @@ use crate::zone::{kmalloc_page, kfree_page, zone_type};
 use crate::vm::PageTable;
 
 static mut KHEAP_START: *mut u8 = 0 as *mut u8;
-static mut KHEAP_PGCNT: usize = 64;
+static mut KHEAP_PGCNT: usize = 256;
 static mut KMEM_PAGE_TABLE: *mut PageTable = 0 as *mut PageTable;
 
 pub fn init() -> Result<(), KError>{

@@ -273,3 +273,15 @@ pub fn M_sti(prev_mie: usize) {
         mstatus::set_mie();
     }
 }
+
+pub fn busy_delay(i: usize) -> usize{
+    let mut ret = i;
+    for k in 0..100_000_00{
+        if k%2 == 0{
+            ret += 3;
+        }else{
+            ret /= 2;
+        }
+    }
+    ret
+}

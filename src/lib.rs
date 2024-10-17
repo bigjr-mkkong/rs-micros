@@ -419,6 +419,8 @@ fn kmain() -> Result<(), KError> {
 
 
     loop{
+        println!("kmain keep running...");
+        let _ = cpu::busy_delay(1);
         unsafe{
             asm!("nop");
         }
@@ -440,3 +442,4 @@ pub mod lock;
 pub mod clint;
 pub mod ecall;
 pub mod allocator;
+pub mod proc;
