@@ -2,7 +2,13 @@
 (Will be) A minix like riscv64gc micro kernel implementation, which focus on extensibility from hardware
 
 ## How to run
-Make sure gcc riscv64 cross compiler toolchain and qemu riscv64 are installed, then execute
+First, configure rust compile with these steps:
+```
+rustup default nightly
+rustup target add riscv64gc-unknown-none-elf
+cargo install cargo-binutils
+```
+Then, make sure gcc riscv64 cross compiler toolchain and qemu riscv64 are installed, after that execute
 ```
 make run
 ```
@@ -35,3 +41,4 @@ There are many TODOs in src code, but here are some general things:
   - [ ] CPU dumper inside trap code
   - [ ] `fsd` and `fld` would report illegal instruction error
   - [ ] Slub(or any kinds of small object allocator) allocator for kheap
+  - [ ] Kernel threads and kernel semaphore
