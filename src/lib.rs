@@ -379,7 +379,6 @@ fn kinit() -> Result<usize, KError> {
         mie::set_mext();
         mie::set_sext();
         sstatus::set_spie();
-        sie::set_sext();
         
 
         /* TODO:
@@ -389,6 +388,9 @@ fn kinit() -> Result<usize, KError> {
         EXTINT_SRCS[10].set_id(10);
         PLIC.set_prio(&EXTINT_SRCS[10], 5)?;
         PLIC.enable(plic_ctx::CORE0_M, &EXTINT_SRCS[10])?;
+        // PLIC.enable(plic_ctx::CORE1_M, &EXTINT_SRCS[10])?;
+        // PLIC.enable(plic_ctx::CORE2_M, &EXTINT_SRCS[10])?;
+        // PLIC.enable(plic_ctx::CORE3_M, &EXTINT_SRCS[10])?;
 
         mstatus::set_mpp(mstatus::MPP::Supervisor);
     }

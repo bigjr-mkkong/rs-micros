@@ -162,7 +162,7 @@ impl plic_controller{
         let usz_src:usize = src.get_id() / 32;
         let mask:u32 = (1 << (src.get_id() % 32));
         unsafe{
-            let enable_pt = (self.enable_base + (usz_ctx * 32 + usz_src)) as *mut u32;
+            let enable_pt = (self.enable_base + (usz_ctx * 0x80 + usz_src)) as *mut u32;
             let mut enable_reg:u32 = enable_pt.read();
             enable_reg = enable_reg | mask;
             enable_pt.write(enable_reg);
@@ -171,6 +171,19 @@ impl plic_controller{
         Ok(())
     }
 
+    pub fn disable(&self, ctx: plic_ctx, src:&extint_src) -> Result<(), KError>{
+        let usz_ctx = ctx.index() as usize;
+        let usz_src:usize = src.get_id() / 32;
+        let mask:u32 = !(1 << (src.get_id() % 32));
+        unsafe{
+            let disable_pt = (self.enable_base + (usz_ctx * 0x80 + usz_src)) as *mut u32;
+            let mut disable_reg:u32 = disable_pt.read();
+            disable_reg = disable_reg | mask;
+            disable_pt.write(disable_reg);
+        }
+
+        Ok(())
+    }
     pub fn set_thres(&self, ctx: plic_ctx, new_thres: u32) -> Result<(), KError>{
         if new_thres > 7{
             return Err(new_kerror!(KErrorType::EFAULT));

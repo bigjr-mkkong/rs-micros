@@ -31,15 +31,11 @@ pub fn kinit() -> Result<usize, KError> {
     let pageroot_ptr = kmem::get_page_table();
     let mut pageroot = unsafe{pageroot_ptr.as_mut().unwrap()};
 
-    unsafe{
-        cpu::sscratch_write((&mut KERNEL_TRAP_FRAME[current_cpu] as *mut TrapFrame) as usize);
-    }
-
     cpu::satp_write(SATP_mode::Sv39, 0, pageroot_ptr as usize);
 
     cpu::mepc_write(crate::eh_func_nobsp_kmain as usize);
 
-    cpu::mstatus_write((1 << 11) | (1 << 5) as usize);
+    // cpu::mstatus_write((1 << 11) | (1 << 5) as usize);
 
     /*
      * Now we only consider sw interrupt, timer and external
@@ -50,6 +46,7 @@ pub fn kinit() -> Result<usize, KError> {
      */
 
     unsafe{
+        mstatus::set_sie();
         CLINT.set_mtimecmp(current_cpu, u64::MAX);
 
         mie::set_msoft();
@@ -57,9 +54,9 @@ pub fn kinit() -> Result<usize, KError> {
         mie::set_mtimer();
 
         mie::set_mext();
-        mie::set_sext();
+        // mie::set_sext();
         sstatus::set_spie();
-        sie::set_sext();
+        // sie::set_sext();
 
         mstatus::set_mpp(mstatus::MPP::Supervisor);
     }

@@ -30,7 +30,7 @@ fn s_trap(xepc: usize,
             3 => {
                 println!("Supervisor: SW Interrupt at CPU#{}", hart);
             },
-            11 => {
+            9 => {
                 println!("Supervisor: External Interrupt at CPU#{}", hart);
                 panic!("Panic for test reason...");
             },

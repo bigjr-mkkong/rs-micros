@@ -21,7 +21,8 @@ pub struct task_struct{
     stack: usize,
     pc: usize,
     pgt_root: usize,
-    cpu: usize
+    cpu: usize,
+    pid: usize
 }
 
 impl task_struct{
@@ -143,6 +144,9 @@ impl task_struct{
             asm!("ld      x29, 28 * 8(s1)");
             asm!("ld      x30, 29 * 8(s1)");
             asm!("ld      x31, 30 * 8(s1)");
+            //load back satp value
+            asm!("ld      x9, 31 * 8(s1)");
+            asm!("csrw      satp, s1");
 
             asm!("csrrw   s1, stval, s1");
 
