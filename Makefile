@@ -5,7 +5,7 @@
 
 PREFIX=riscv64-linux-gnu-
 
-CC=$(PREFIX)g++
+CC=$(PREFIX)gcc
 OBJDUMP=$(PREFIX)objdump
 OBJCOPY=$(PREFIX)objcopy
 
