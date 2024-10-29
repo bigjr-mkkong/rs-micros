@@ -43,7 +43,10 @@ s_trap_vector:
     csrr    s2, sscratch
     sd      s2, 8 * 8(s1)
 
+    csrrw   s1, sscratch, s1
     call    which_cpu
+    csrrw   s1, sscratch, s1
+
     move    a3, a0
 
     csrr    a0, sepc
@@ -52,8 +55,12 @@ s_trap_vector:
     csrr    a4, sstatus
     move    a5, t0
 
-    ld      sp, 65 * 8(t0)
+
+    ld      sp, 65 * 8(s1)
+
+    csrrw   s1, sscratch, s1
     call    s_trap
+    csrrw   s1, sscratch, s1
 
     csrw    sepc, a0
 
@@ -151,7 +158,7 @@ m_trap_vector:
     csrr    a2, mcause
     csrr    a3, mhartid
     csrr    a4, mstatus
-    move    a5, t0
+    move    a5, s1
 
     ld      sp, 65 * 8(s1)
     call    m_trap

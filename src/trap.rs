@@ -31,8 +31,7 @@ fn s_trap(xepc: usize,
                 println!("Supervisor: SW Interrupt at CPU#{}", hart);
             },
             9 => {
-                println!("Supervisor: External Interrupt at CPU#{}", hart);
-                panic!("Panic for test reason...");
+                println!("Supervisor: Ext Interrupt at CPU#{}", hart);
             },
             _ => {
                 panic!("S-mode: Unhandled async trap on CPU#{}", hart);

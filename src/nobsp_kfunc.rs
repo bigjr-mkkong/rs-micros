@@ -54,9 +54,10 @@ pub fn kinit() -> Result<usize, KError> {
         mie::set_mtimer();
 
         mie::set_mext();
-        // mie::set_sext();
+
+        mie::set_sext();
         sstatus::set_spie();
-        // sie::set_sext();
+        sie::set_sext();
 
         mstatus::set_mpp(mstatus::MPP::Supervisor);
     }
