@@ -78,11 +78,11 @@ fn m_trap(xepc: usize,
             11 => {
                 unsafe{
                     let current_ctx = plic::id2plic_ctx(hart);
-                    let extint_id = PLIC.claim(plic::plic_ctx::CORE0_M).unwrap_or(60);
+                    let extint_id = PLIC.claim(&current_ctx).unwrap_or(60);
                     match extint_id{
                         10 => {
                             let ch = M_UART.lock().get().unwrap();
-                            println!("Uart extint: {}", ch as char);
+                            println!("Uart extint at CPU#{}: {}", hart, ch as char);
                         },
                         0 => {
                             //do nothing when 0
@@ -91,7 +91,7 @@ fn m_trap(xepc: usize,
                             println!("Unsupported extint: #{} on CPU#{}", extint_id, hart);
                         }
                     }
-                    PLIC.complete(plic::plic_ctx::CORE0_M, extint_id);
+                    PLIC.complete(&current_ctx, extint_id);
                 }
             },
             _ => {

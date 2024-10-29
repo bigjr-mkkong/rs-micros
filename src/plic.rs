@@ -1,8 +1,3 @@
-/*
- * We are using is SiFive PLIC, here is the spec:
- *https://sifive.cdn.prismic.io/sifive%2F834354f0-08e6-423c-bf1f-0cb58ef14061_fu540-c000-v1.0.pdf#%5B%7B%22num%22%3A164%2C%22gen%22%3A0%7D%2C%7B%22name%22%3A%22XYZ%22%7D%2C0%2C630%2C0%5D
- */
-
 use core::mem::variant_count;
 
 use crate::{S_UART, M_UART};
@@ -62,6 +57,7 @@ pub enum plic_ctx{
     CORE1_M,
     CORE2_M,
     CORE3_M,
+    CORE0_S,
     CORE1_S,
     CORE2_S,
     CORE3_S,
@@ -71,12 +67,13 @@ impl plic_ctx{
     pub fn index(&self) -> usize{
         match self{
             plic_ctx::CORE0_M => 0,
-            plic_ctx::CORE1_M => 1,
-            plic_ctx::CORE2_M => 3,
-            plic_ctx::CORE3_M => 5,
-            plic_ctx::CORE1_S => 2,
-            plic_ctx::CORE2_S => 4,
-            plic_ctx::CORE3_S => 6,
+            plic_ctx::CORE1_M => 2,
+            plic_ctx::CORE2_M => 4,
+            plic_ctx::CORE3_M => 6,
+            plic_ctx::CORE0_S => 1,
+            plic_ctx::CORE1_S => 3,
+            plic_ctx::CORE2_S => 5,
+            plic_ctx::CORE3_S => 7,
         }
     }
 
@@ -192,30 +189,31 @@ impl plic_controller{
         let thres_base = self.thres_base as *mut u32;
 
         unsafe{
-            thres_base.add(usz_ctx * 0x1000).write_volatile(new_thres);
+            thres_base.add(usz_ctx * 0x400).write_volatile(new_thres);
         }
 
         Ok(())
     }
 
-    pub fn claim(&self, ctx: plic_ctx) -> Result<u32, KError>{
+    pub fn claim(&self, ctx: &plic_ctx) -> Result<u32, KError>{
         let usz_ctx = ctx.index() as usize;
         let claim_base = self.thres_base as *mut u32;
         let mut claimed_int: u32;
 
         unsafe{
-            claimed_int = claim_base.add(0x1000 * usz_ctx + 1).read_volatile();
+            let claim_addr = claim_base.add(0x400 * usz_ctx + 1);
+            claimed_int = claim_addr.read_volatile();
         }
 
         Ok(claimed_int)
     }
 
-    pub fn complete(&self, ctx: plic_ctx, src: u32) -> Result<(), KError>{
+    pub fn complete(&self, ctx: &plic_ctx, src: u32) -> Result<(), KError>{
         let usz_ctx = ctx.index() as usize;
         let claim_base = self.thres_base as *mut u32;
 
         unsafe{
-            claim_base.add(0x1000 * usz_ctx + 1).write(src);
+            claim_base.add(0x400 * usz_ctx + 1).write(src);
         }
 
         Ok(())
@@ -225,8 +223,24 @@ impl plic_controller{
 
 pub fn id2plic_ctx(hartid: usize) -> plic_ctx{
     if let Mode::Machine = get_cpu_mode(hartid){
-        plic_ctx::CORE0_M
+        match hartid{
+            0 => plic_ctx::CORE0_M,
+            1 => plic_ctx::CORE1_M,
+            2 => plic_ctx::CORE2_M,
+            3 => plic_ctx::CORE3_M,
+            _ => {
+                panic!();
+            }
+        }
     }else{
-        plic_ctx::CORE1_S
+        match hartid{
+            0 => plic_ctx::CORE0_S,
+            1 => plic_ctx::CORE1_S,
+            2 => plic_ctx::CORE2_S,
+            3 => plic_ctx::CORE3_S,
+            _ => {
+                panic!();
+            }
+        }
     }
 }

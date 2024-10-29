@@ -379,20 +379,18 @@ fn kinit() -> Result<usize, KError> {
         mie::set_mext();
         mie::set_sext();
 
-        mideleg::set_sext();
+        // mideleg::set_sext();
         sie::set_sext();
         sstatus::set_spie();
         
 
         /* TODO:
          * Get rid this ugly written code and replace with fancy vector
-         *
-         * MAYBE, our documentation of PLIC is wrong, and qemu plic actually have CORE0_S?
          */
         EXTINT_SRCS[10].set_name(extint_name::UART0);
         EXTINT_SRCS[10].set_id(10);
         PLIC.set_prio(&EXTINT_SRCS[10], 5)?;
-        PLIC.disable(plic_ctx::CORE0_M, &EXTINT_SRCS[10])?;
+        PLIC.enable(plic_ctx::CORE0_M, &EXTINT_SRCS[10])?;
         PLIC.enable(plic_ctx::CORE1_M, &EXTINT_SRCS[10])?;
         // PLIC.enable(plic_ctx::CORE2_M, &EXTINT_SRCS[10])?;
         // PLIC.enable(plic_ctx::CORE3_M, &EXTINT_SRCS[10])?;
