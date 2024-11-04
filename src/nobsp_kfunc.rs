@@ -74,12 +74,14 @@ pub fn kmain() -> Result<(), KError> {
 
     unsafe{
         asm!("ebreak");
-        println!("CPU{} Back from trap\n", current_cpu);
 
+        println!("CPU{} Back from trap\n", current_cpu);
         CLINT.set_mtimecmp(current_cpu, CLINT.read_mtime() + 0x500_000);
     }
 
     loop{
+        println!("CPU#{} kmain keep running...", current_cpu);
+        let _ = cpu::busy_delay(1);
         unsafe{
             asm!("nop");
         }

@@ -34,9 +34,12 @@ BS_OUT=os.bin
 QEMU=qemu-system-riscv64
 MACH=virt
 CPU=rv64
-CPU_CNT=2
+CPU_CNT=4
 MEM=128M
 DRIVE=hdd.dsk
+SERIAL=mon:stdio
+# pty can be used to do concurrent debug, it will blast data into uart
+# SERIAL=pty
 
 all:
 	cargo build
@@ -49,7 +52,7 @@ run: all dump
 		-cpu $(CPU)\
 		-m $(MEM)\
 		-nographic\
-		-serial mon:stdio\
+		-serial $(SERIAL)\
 		-bios none\
 		-kernel $(OUT)\
 
@@ -60,7 +63,7 @@ debug: all dump
 		-smp $(CPU_CNT)\
 		-m $(MEM)\
 		-nographic\
-		-serial mon:stdio\
+		-serial $(SERIAL)\
 		-bios none\
 		-kernel $(OUT)\
 		-s -S

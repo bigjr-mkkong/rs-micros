@@ -10,6 +10,11 @@ enum task_state{
     Dead
 }
 
+enum task_typ{
+    KERN_TASK,
+    USER_TASK
+}
+
 
 /*
  * cpu need to keep same as current hartid
@@ -22,7 +27,8 @@ pub struct task_struct{
     pc: usize,
     pgt_root: usize,
     cpu: usize,
-    pid: usize
+    pid: usize,
+    typ: task_typ
 }
 
 impl task_struct{

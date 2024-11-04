@@ -62,7 +62,7 @@ fn m_trap(xepc: usize,
     let is_async = if xcause >> 63 & 1 == 1 { true } else {false};
 
     let cause_num = xcause & 0xfff;
-    let mut pc_ret = xepc;
+    let mut pc_ret:usize = xepc;
 
     if is_async{
         match cause_num{
@@ -81,8 +81,12 @@ fn m_trap(xepc: usize,
                     let extint_id = PLIC.claim(&current_ctx).unwrap_or(60);
                     match extint_id{
                         10 => {
-                            let ch = M_UART.lock().get().unwrap();
-                            println!("Uart extint at CPU#{}: {}", hart, ch as char);
+                            let ch_get = M_UART.lock().get();
+                            if let Some(ch) = ch_get{
+                                println!("Uart extint at CPU#{}: {}", hart, ch as char);
+                            }else{
+                                println!("Uart extint at CPU#{}: Failed", hart);
+                            }
                         },
                         0 => {
                             //do nothing when 0
@@ -113,7 +117,7 @@ fn m_trap(xepc: usize,
                 panic!();
 			},
 			3 => {
-				println!("Breakpoint Trap at CPU#{}\n", hart);
+				// println!("Breakpoint Trap at CPU#{}\n", hart);
                 pc_ret += 4;
 			},
 			4 => {
@@ -141,14 +145,6 @@ fn m_trap(xepc: usize,
                 unsafe{
                     let opcode = SECALL_FRAME[hart].get_opcode();
                     match opcode{
-                        S2Mop::CLI => {
-                            let cli_ret = M_cli();
-                            SECALL_FRAME[hart].set_ret(cli_ret);
-                        },
-                        S2Mop::STI => {
-                            let prev_mie = SECALL_FRAME[hart].get_args()[0];
-                            M_sti(prev_mie);
-                        },
                         S2Mop::UNDEF => {
                             panic!("Supervisor is tring to call undefined operation");
                         }
