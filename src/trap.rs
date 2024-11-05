@@ -8,6 +8,16 @@ use crate::EXTINT_SRCS;
 use riscv::register;
 use riscv::register::{mstatus, sstatus, sstatus::SPP, mstatus::MPP};
 
+fn reg_dump(xepc: usize, xtval: usize, xcause: usize, hart: usize, xstatus: usize) {
+    println!("--- Register Dump ---");
+    println!("Hart    : {}", hart);
+    println!("xepc    : {:#x}", xepc);
+    println!("xtval   : {:#x}", xtval);
+    println!("xcause  : {:#x}", xcause);
+    println!("xstatus : {:#x}", xstatus);
+    println!("----------------------");
+}
+
 #[no_mangle]
 extern "C"
 fn s_trap(xepc: usize, 
@@ -24,6 +34,8 @@ fn s_trap(xepc: usize,
 
     let cause_num = xcause & 0xfff;
     let mut pc_ret = xepc;
+    let mut error_detected = false;
+    let mut error_cause_num = 0;
 
     if is_async{
         match cause_num{
@@ -34,12 +46,19 @@ fn s_trap(xepc: usize,
                 println!("Supervisor: Ext Interrupt at CPU#{}", hart);
             },
             _ => {
-                panic!("S-mode: Unhandled async trap on CPU#{}", hart);
+                error_detected = true;
+                error_cause_num = cause_num;
             }
         }
     }else{
         println!("This exception should not been handled at S-mode");
-        panic!();
+        error_detected = true;
+        error_cause_num = cause_num;
+    }
+
+    if error_detected {
+        reg_dump(xepc, xtval, xcause, hart, xstatus);
+        panic!("S-mode: Unhandled trap with cause_num: {}", error_cause_num);
     }
 
     set_cpu_mode(spp, hart);
@@ -63,6 +82,8 @@ fn m_trap(xepc: usize,
 
     let cause_num = xcause & 0xfff;
     let mut pc_ret:usize = xepc;
+    let mut error_detected = false;
+    let mut error_cause_num = 0;
 
     if is_async{
         match cause_num{
@@ -99,22 +120,26 @@ fn m_trap(xepc: usize,
                 }
             },
             _ => {
-                panic!("Unhandled async trap on CPU#{}", hart);
+                error_detected = true;
+                error_cause_num = cause_num;
             }
         }
     }else{
         match cause_num {
             0 => {
 				println!("Instruction Address Misaligned at CPU#{}\n", hart);
-                panic!();
+                error_detected = true;
+                error_cause_num = cause_num;
             },
             1 => {
 				println!("Instruction Access Fault at CPU#{}\n", hart);
-                panic!();
+                error_detected = true;
+                error_cause_num = cause_num;
             },
 			2 => {
 				println!("Illegal instruction at CPU#{}\n", hart);
-                panic!();
+                error_detected = true;
+                error_cause_num = cause_num;
 			},
 			3 => {
 				// println!("Breakpoint Trap at CPU#{}\n", hart);
@@ -122,19 +147,23 @@ fn m_trap(xepc: usize,
 			},
 			4 => {
 				println!("Load Address Misaligned at CPU#{}\n", hart);
-                panic!();
+                error_detected = true;
+                error_cause_num = cause_num;
 			},
 			5 => {
 				println!("Load Access Fault at CPU#{}\n", hart);
-                panic!();
+                error_detected = true;
+                error_cause_num = cause_num;
 			},
 			6 => {
 				println!("Store/AMO Address Misaligned at CPU#{}\n", hart);
-                panic!();
+                error_detected = true;
+                error_cause_num = cause_num;
 			},
 			7 => {
 				println!("Store/AMO Access Fault at CPU#{}\n", hart);
-                panic!();
+                error_detected = true;
+                error_cause_num = cause_num;
 			},
 			8 => {
 				println!("E-call from User mode at CPU#{}", hart);
@@ -146,6 +175,7 @@ fn m_trap(xepc: usize,
                     let opcode = SECALL_FRAME[hart].get_opcode();
                     match opcode{
                         S2Mop::UNDEF => {
+                            reg_dump(xepc, xtval, xcause, hart, xstatus);
                             panic!("Supervisor is tring to call undefined operation");
                         }
                     }
@@ -167,7 +197,8 @@ fn m_trap(xepc: usize,
 			},
 			_ => {
 				println!("Unhandled sync trap at CPU#{}\n", hart);
-                panic!();
+                error_detected = true;
+                error_cause_num = cause_num;
 			}
 		}
         /*
@@ -175,6 +206,10 @@ fn m_trap(xepc: usize,
          * Implement reg_dump on print trap CSRs
          */
         // reg_dump();
+        if error_detected {
+            reg_dump(xepc, xtval, xcause, hart, xstatus);
+            panic!("M-mode: Unhandled trap with cause_num: {}", error_cause_num);
+        }
     }
 
     set_cpu_mode(mpp, hart);
