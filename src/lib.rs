@@ -1,5 +1,4 @@
 #![no_std]
-
 #![allow(unused)]
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
@@ -33,20 +32,20 @@ extern "C" {
 use core::arch::asm;
 use core::mem::size_of;
 use core::ptr;
+use riscv::register::{medeleg, mideleg, mie, mstatus, sie, sstatus};
 use spin::Mutex;
-use riscv::register::{sstatus, mstatus, mideleg, medeleg, mie, sie};
 
-use error::{KError, KErrorType};
-use zone::{zone_type, kmalloc_page, kfree_page};
-use vm::{ident_range_map, virt2phys};
-use cpu::{SATP_mode, TrapFrame, which_cpu, get_cpu_mode};
 use crate::lock::spin_mutex;
 use crate::lock::{M_lock, S_lock};
-use plic::{plic_controller, plic_ctx, extint_src, extint_name};
+use clint::clint_controller;
+use cpu::{get_cpu_mode, which_cpu, SATP_mode, TrapFrame};
+use ecall::{ecall_args, S2Mop};
+use error::{KError, KErrorType};
 use nobsp_kfunc::kinit as nobsp_kinit;
 use nobsp_kfunc::kmain as nobsp_kmain;
-use clint::clint_controller;
-use ecall::{ecall_args, S2Mop};
+use plic::{extint_name, extint_src, plic_controller, plic_ctx};
+use vm::{ident_range_map, virt2phys};
+use zone::{kfree_page, kmalloc_page, zone_type};
 
 #[macro_export]
 macro_rules! print
@@ -86,11 +85,8 @@ extern "C" fn eh_personality() {}
 fn panic(info: &core::panic::PanicInfo) -> ! {
     print!("System Aborting...");
     if let Some(p) = info.location() {
-        println!("line {}, file {}: {}",
-            p.line(),
-            p.file(),
-            info.message());
-    }else{
+        println!("line {}, file {}: {}", p.line(), p.file(), info.message());
+    } else {
         println!("PanicInfo not available yet");
     }
 
@@ -98,50 +94,46 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 }
 
 #[no_mangle]
-extern "C"
-fn abort() -> ! {
-    loop{
-        unsafe{
+extern "C" fn abort() -> ! {
+    loop {
+        unsafe {
             asm!("nop");
         }
     }
 }
 
-
 #[no_mangle]
-extern "C"
-fn eh_func_kinit() -> usize{
+extern "C" fn eh_func_kinit() -> usize {
     let cpuid = cpu::mhartid_read();
-    unsafe{
-        cpu::sscratch_write((&mut KERNEL_TRAP_FRAME[cpuid] as *mut TrapFrame) as usize);
-        cpu::mscratch_write(cpu::sscratch_read());
+    unsafe {
+        cpu::mscratch_write((&mut KERNEL_TRAP_FRAME[cpuid] as *mut TrapFrame) as usize);
+        cpu::sscratch_write(cpu::mscratch_read());
     }
     cpu::set_cpu_mode(cpu::Mode::Machine, cpuid);
     let init_return = kinit();
-    if let Err(er_code) = init_return{
+    if let Err(er_code) = init_return {
         println!("{}", er_code);
         println!("kinit() Failed on CPU#{}, System halting now...", cpuid);
-        loop{
-            unsafe{
+        loop {
+            unsafe {
                 asm!("nop");
             }
         }
-    }else{
+    } else {
         init_return.unwrap_or_default()
     }
 }
 
 #[no_mangle]
-extern "C"
-fn eh_func_kmain(){
+extern "C" fn eh_func_kmain() {
     let cpuid = which_cpu();
     cpu::set_cpu_mode(cpu::Mode::Supervisor, cpuid);
     let main_return = kmain();
-    if let Err(er_code) = main_return{
+    if let Err(er_code) = main_return {
         println!("{}", er_code);
         println!("kmain() Failed, System halting now...");
-        loop{
-            unsafe{
+        loop {
+            unsafe {
                 asm!("nop");
             }
         }
@@ -149,52 +141,52 @@ fn eh_func_kmain(){
 }
 
 #[no_mangle]
-extern "C"
-fn eh_func_kinit_nobsp() -> usize{
+extern "C" fn eh_func_kinit_nobsp() -> usize {
     let cpuid = cpu::mhartid_read();
-    unsafe{
-        cpu::sscratch_write((&mut KERNEL_TRAP_FRAME[cpuid] as *mut TrapFrame) as usize);
-        cpu::mscratch_write(cpu::sscratch_read());
+    unsafe {
+        cpu::mscratch_write((&mut KERNEL_TRAP_FRAME[cpuid] as *mut TrapFrame) as usize);
+        cpu::sscratch_write(cpu::mscratch_read());
     }
     let init_return = nobsp_kinit();
-    if let Err(er_code) = init_return{
+    if let Err(er_code) = init_return {
         println!("{}", er_code);
-        println!("nobsp_kinit() Failed at CPU#{}, System halting now...", cpuid);
-        loop{
-            unsafe{
+        println!(
+            "nobsp_kinit() Failed at CPU#{}, System halting now...",
+            cpuid
+        );
+        loop {
+            unsafe {
                 asm!("nop");
             }
         }
-    }else{
+    } else {
         init_return.unwrap_or_default()
     }
 }
 
 #[no_mangle]
-pub extern "C"
-fn eh_func_nobsp_kmain(){
+pub extern "C" fn eh_func_nobsp_kmain() {
     let main_return = nobsp_kmain();
-    if let Err(er_code) = main_return{
+    if let Err(er_code) = main_return {
         println!("{}", er_code);
         println!("kmain() Failed, System halting now...");
-        loop{
-            unsafe{
+        loop {
+            unsafe {
                 asm!("nop");
             }
         }
     }
 }
-//   ____ _     ___  ____    _    _      __     ___    ____  ____  
-//  / ___| |   / _ \| __ )  / \  | |     \ \   / / \  |  _ \/ ___| 
-// | |  _| |  | | | |  _ \ / _ \ | |      \ \ / / _ \ | |_) \___ \ 
+//   ____ _     ___  ____    _    _      __     ___    ____  ____
+//  / ___| |   / _ \| __ )  / \  | |     \ \   / / \  |  _ \/ ___|
+// | |  _| |  | | | |  _ \ / _ \ | |      \ \ / / _ \ | |_) \___ \
 // | |_| | |__| |_| | |_) / ___ \| |___    \ V / ___ \|  _ < ___) |
-//  \____|_____\___/|____/_/   \_\_____|    \_/_/   \_\_| \_\____/ 
-pub const ZONE_DEFVAL:spin_mutex<zone::mem_zone, S_lock> =
+//  \____|_____\___/|____/_/   \_\_____|    \_/_/   \_\_| \_\____/
+pub const ZONE_DEFVAL: spin_mutex<zone::mem_zone, S_lock> =
     spin_mutex::<zone::mem_zone, S_lock>::new(zone::mem_zone::new());
 
-pub static SYS_ZONES: [spin_mutex<zone::mem_zone, S_lock>; 3] = [
-    ZONE_DEFVAL; zone_type::type_cnt()
-];
+pub static SYS_ZONES: [spin_mutex<zone::mem_zone, S_lock>; 3] =
+    [ZONE_DEFVAL; zone_type::type_cnt()];
 
 pub static M_UART: spin_mutex<uart::Uart, M_lock> =
     spin_mutex::<uart::Uart, M_lock>::new(uart::Uart::new(0x1000_0000));
@@ -205,7 +197,7 @@ pub static S_UART: spin_mutex<uart::Uart, S_lock> =
 pub static mut KERNEL_TRAP_FRAME: [TrapFrame; 8] = [TrapFrame::new(); 8];
 pub static mut PLIC: plic_controller = plic_controller::new(plic::PLIC_BASE);
 pub static mut CLINT: clint_controller = clint_controller::new(clint::CLINT_BASE);
-pub static mut SECALL_FRAME: [ecall_args; cpu::MAX_HARTS] = [ecall_args::new(); cpu::MAX_HARTS ];
+pub static mut SECALL_FRAME: [ecall_args; cpu::MAX_HARTS] = [ecall_args::new(); cpu::MAX_HARTS];
 
 /*
  * TODO:
@@ -225,29 +217,33 @@ fn kinit() -> Result<usize, KError> {
      * Setting up new zone
      */
     SYS_ZONES[zone_type::ZONE_NORMAL.val()].lock().init(
-            ptr::addr_of!(_heap_start),
-            ptr::addr_of!(_heap_end),
-            zone_type::ZONE_NORMAL,
-        zone::AllocatorSelector::NaiveAllocator)?;
+        ptr::addr_of!(_heap_start),
+        ptr::addr_of!(_heap_end),
+        zone_type::ZONE_NORMAL,
+        zone::AllocatorSelector::NaiveAllocator,
+    )?;
 
     SYS_ZONES[zone_type::ZONE_UNDEF.val()].lock().init(
         0 as *const u8,
         0 as *const u8,
         zone_type::ZONE_UNDEF,
-        zone::AllocatorSelector::EmptyAllocator)?;
+        zone::AllocatorSelector::EmptyAllocator,
+    )?;
 
     kmem::init()?;
 
     let pageroot_ptr = kmem::get_page_table();
-    let mut pageroot = unsafe{pageroot_ptr.as_mut().unwrap()};
+    let mut pageroot = unsafe { pageroot_ptr.as_mut().unwrap() };
 
     let kheap_begin = kmem::get_kheap_start();
     let kheap_pgcnt = kmem::get_kheap_pgcnt();
 
-    ident_range_map(pageroot,
-            aligl_4k!(ptr::addr_of!(_text_start) as usize),
-            aligh_4k!(ptr::addr_of!(_text_end) as usize),
-            vm::EntryBits::ReadExecute.val());
+    ident_range_map(
+        pageroot,
+        aligl_4k!(ptr::addr_of!(_text_start) as usize),
+        aligh_4k!(ptr::addr_of!(_text_end) as usize),
+        vm::EntryBits::ReadExecute.val(),
+    );
 
     // let usz_heap_start = ptr::addr_of!(_heap_start) as usize;
     // let usz_heap_end = usz_heap_start + SYS_ZONES[zone_type::ZONE_NORMAL.val()].lock().get_size()?;
@@ -256,112 +252,129 @@ fn kinit() -> Result<usize, KError> {
     //         usz_heap_end,
     //         vm::EntryBits::ReadWrite.val());
 
-    ident_range_map(pageroot, 
-            kheap_begin as usize,
-            kheap_begin as usize + page::PAGE_SIZE * kheap_pgcnt,
-            vm::EntryBits::ReadWrite.val());
+    ident_range_map(
+        pageroot,
+        kheap_begin as usize,
+        kheap_begin as usize + page::PAGE_SIZE * kheap_pgcnt,
+        vm::EntryBits::ReadWrite.val(),
+    );
 
-    ident_range_map(pageroot,
-            aligl_4k!(ptr::addr_of!(_rodata_start) as usize),
-            aligh_4k!(ptr::addr_of!(_rodata_end) as usize),
-            vm::EntryBits::ReadExecute.val());
+    ident_range_map(
+        pageroot,
+        aligl_4k!(ptr::addr_of!(_rodata_start) as usize),
+        aligh_4k!(ptr::addr_of!(_rodata_end) as usize),
+        vm::EntryBits::ReadExecute.val(),
+    );
 
-    ident_range_map(pageroot,
-            aligl_4k!(ptr::addr_of!(_data_start) as usize),
-            aligh_4k!(ptr::addr_of!(_data_end) as usize),
-            vm::EntryBits::ReadWrite.val());
+    ident_range_map(
+        pageroot,
+        aligl_4k!(ptr::addr_of!(_data_start) as usize),
+        aligh_4k!(ptr::addr_of!(_data_end) as usize),
+        vm::EntryBits::ReadWrite.val(),
+    );
 
-    ident_range_map(pageroot,
-            aligl_4k!(ptr::addr_of!(_bss_start) as usize),
-            aligh_4k!(ptr::addr_of!(_bss_end) as usize),
-            vm::EntryBits::ReadWrite.val());
+    ident_range_map(
+        pageroot,
+        aligl_4k!(ptr::addr_of!(_bss_start) as usize),
+        aligh_4k!(ptr::addr_of!(_bss_end) as usize),
+        vm::EntryBits::ReadWrite.val(),
+    );
 
-    ident_range_map(pageroot,
-            aligl_4k!(ptr::addr_of!(_stack_end) as usize),
-            aligh_4k!(ptr::addr_of!(_stack_start) as usize),
-            vm::EntryBits::ReadWrite.val());
+    ident_range_map(
+        pageroot,
+        aligl_4k!(ptr::addr_of!(_stack_end) as usize),
+        aligh_4k!(ptr::addr_of!(_stack_start) as usize),
+        vm::EntryBits::ReadWrite.val(),
+    );
 
+    //uart mmio area
+    ident_range_map(
+        pageroot,
+        aligl_4k!(ptr::addr_of!(_virtio_start) as usize),
+        aligh_4k!(ptr::addr_of!(_virtio_end) as usize),
+        vm::EntryBits::ReadWrite.val(),
+    );
 
-//uart mmio area
-    ident_range_map(pageroot,
-            aligl_4k!(ptr::addr_of!(_virtio_start) as usize),
-            aligh_4k!(ptr::addr_of!(_virtio_end) as usize),
-            vm::EntryBits::ReadWrite.val());
+    //qemu mmio memory mapping according to qemu/hw/riscv/virt.c
 
-//qemu mmio memory mapping according to qemu/hw/riscv/virt.c
-    
     //CLIENT
-    ident_range_map(pageroot,
-            0x0200_0000,
-            0x0200_ffff,
-            vm::EntryBits::ReadWrite.val());
-
+    ident_range_map(
+        pageroot,
+        0x0200_0000,
+        0x0200_ffff,
+        vm::EntryBits::ReadWrite.val(),
+    );
 
     //PLIC
-    unsafe{
-        ident_range_map(pageroot,
-                PLIC.base,
-                PLIC.base + (plic_ctx::max_ctx() + 2) * 0x1000,
-                vm::EntryBits::ReadWrite.val());
+    unsafe {
+        ident_range_map(
+            pageroot,
+            PLIC.base,
+            PLIC.base + (plic_ctx::max_ctx() + 2) * 0x1000,
+            vm::EntryBits::ReadWrite.val(),
+        );
 
-        ident_range_map(pageroot,
-                PLIC.thres_base,
-                PLIC.thres_base + plic_ctx::max_ctx() * 0x1000,
-                vm::EntryBits::ReadWrite.val());
+        ident_range_map(
+            pageroot,
+            PLIC.thres_base,
+            PLIC.thres_base + plic_ctx::max_ctx() * 0x1000,
+            vm::EntryBits::ReadWrite.val(),
+        );
     }
-    
 
     let paddr = 0x1000_0000 as usize;
     let vaddr = virt2phys(&pageroot, paddr)?.unwrap_or(0);
 
     println!("VM Walker test: Paddr: {:#x} -> Vaddr: {:#x}", paddr, vaddr);
-    
+
     /*
      * Memory allocation for trap stack
      */
-    unsafe{
-        for cpu_cnt in 0..cpu::MAX_HARTS{
+    unsafe {
+        for cpu_cnt in 0..cpu::MAX_HARTS {
             KERNEL_TRAP_FRAME[cpu_cnt].cpuid = cpu_cnt;
 
-            KERNEL_TRAP_FRAME[cpu_cnt].trap_stack = 
-                    kmalloc_page(zone_type::ZONE_NORMAL, 2)?.add(page::PAGE_SIZE);
+            KERNEL_TRAP_FRAME[cpu_cnt].trap_stack =
+                kmalloc_page(zone_type::ZONE_NORMAL, 2)?.add(page::PAGE_SIZE);
 
-            ident_range_map(pageroot, 
-                    KERNEL_TRAP_FRAME[cpu_cnt].trap_stack.sub(2 * page::PAGE_SIZE) as usize,
-                    KERNEL_TRAP_FRAME[cpu_cnt].trap_stack as usize,
-                    vm::EntryBits::ReadWrite.val());
+            ident_range_map(
+                pageroot,
+                KERNEL_TRAP_FRAME[cpu_cnt]
+                    .trap_stack
+                    .sub(2 * page::PAGE_SIZE) as usize,
+                KERNEL_TRAP_FRAME[cpu_cnt].trap_stack as usize,
+                vm::EntryBits::ReadWrite.val(),
+            );
 
             let trapstack_paddr = KERNEL_TRAP_FRAME[cpu_cnt].trap_stack as usize - 1;
             let trapstack_vaddr = virt2phys(&pageroot, trapstack_paddr)?.unwrap_or(0);
 
-            println!("CPU#{} TrapStack: (vaddr){:#x} -> (paddr){:#x}", 
-                    cpu_cnt,
-                    trapstack_paddr, 
-                    trapstack_vaddr
-                    );
+            println!(
+                "CPU#{} TrapStack: (vaddr){:#x} -> (paddr){:#x}",
+                cpu_cnt, trapstack_paddr, trapstack_vaddr
+            );
 
             let trapfram_paddr = ptr::addr_of_mut!(KERNEL_TRAP_FRAME[cpu_cnt]) as usize;
             let trapfram_vaddr = virt2phys(&pageroot, trapfram_paddr)?.unwrap_or(0);
 
-            println!("CPU#{} TrapFrame: (vaddr){:#x} -> (paddr){:#x}", 
-                    cpu_cnt,
-                    trapfram_paddr, 
-                    trapfram_vaddr
-                    );
+            println!(
+                "CPU#{} TrapFrame: (vaddr){:#x} -> (paddr){:#x}",
+                cpu_cnt, trapfram_paddr, trapfram_vaddr
+            );
         }
     }
 
     /*
-     * Set up satp register to provide paging mode and PPN of 
+     * Set up satp register to provide paging mode and PPN of
      * root page table
      */
     cpu::satp_write(SATP_mode::Sv39, 0, pageroot_ptr as usize);
 
+    kmem::set_ksatp(cpu::satp_read());
     /*
      * Set up arrival address of S-mode entry
      */
     cpu::mepc_write(eh_func_kmain as usize);
-
 
     /*
      * We only delegate ext interrupt and all exception to S-mode
@@ -369,7 +382,7 @@ fn kinit() -> Result<usize, KError> {
      * timer needs to be handled in M-mode since we need access to CLINT, as well as sw interrupt
      */
 
-    unsafe{
+    unsafe {
         CLINT.set_mtimecmp(current_cpu, u64::MAX);
 
         mie::set_msoft();
@@ -382,7 +395,6 @@ fn kinit() -> Result<usize, KError> {
         // mideleg::set_sext();
         sie::set_sext();
         sstatus::set_spie();
-        
 
         /* TODO:
          * Get rid this ugly written code and replace with fancy vector
@@ -393,7 +405,7 @@ fn kinit() -> Result<usize, KError> {
         PLIC.enable(plic_ctx::CORE0_M, &EXTINT_SRCS[10])?;
         PLIC.enable(plic_ctx::CORE1_M, &EXTINT_SRCS[10])?;
         PLIC.enable(plic_ctx::CORE2_M, &EXTINT_SRCS[10])?;
-        // PLIC.enable(plic_ctx::CORE3_M, &EXTINT_SRCS[10])?;
+        PLIC.enable(plic_ctx::CORE3_M, &EXTINT_SRCS[10])?;
 
         mstatus::set_mpp(mstatus::MPP::Supervisor);
     }
@@ -403,7 +415,7 @@ fn kinit() -> Result<usize, KError> {
     /*
      * Unlock other cores from early spin lock
      */
-    unsafe{
+    unsafe {
         let early_boot: *mut u64 = ptr::addr_of_mut!(cpu_early_block);
         early_boot.write_volatile(0xffff_ffff);
     }
@@ -412,39 +424,37 @@ fn kinit() -> Result<usize, KError> {
 }
 
 fn kmain() -> Result<(), KError> {
-    let current_cpu = which_cpu();;
+    let current_cpu = which_cpu();
     println!("CPU#{} Switched to S mode", current_cpu);
-    
-    unsafe{
+
+    unsafe {
         asm!("ebreak");
 
         println!("CPU{} Back from trap\n", current_cpu);
         CLINT.set_mtimecmp(current_cpu, CLINT.read_mtime() + 0x500_000);
     }
 
-
-    loop{
+    loop {
         println!("CPU#{} kmain keep running...", current_cpu);
         let _ = cpu::busy_delay(1);
-        unsafe{
+        unsafe {
             asm!("nop");
         }
     }
 }
 
-
-pub mod uart;
-pub mod zone;
-pub mod error;
-pub mod page;
-pub mod vm;
-pub mod kmem;
-pub mod trap;
-pub mod cpu;
-pub mod nobsp_kfunc;
-pub mod plic;
-pub mod lock;
-pub mod clint;
-pub mod ecall;
 pub mod allocator;
+pub mod clint;
+pub mod cpu;
+pub mod ecall;
+pub mod error;
+pub mod kmem;
+pub mod lock;
+pub mod nobsp_kfunc;
+pub mod page;
+pub mod plic;
 pub mod proc;
+pub mod trap;
+pub mod uart;
+pub mod vm;
+pub mod zone;

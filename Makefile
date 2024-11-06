@@ -38,8 +38,8 @@ CPU_CNT=4
 MEM=128M
 DRIVE=hdd.dsk
 SERIAL=mon:stdio
-# pty can be used to do concurrent debug, it will blast data into uart
 # SERIAL=pty
+# pty can be used to do concurrent debug, it will blast data into uart
 
 all:
 	cargo build

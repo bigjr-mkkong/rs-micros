@@ -1,15 +1,15 @@
+use crate::{M_UART, S_UART};
 use core::convert::TryInto;
-use crate::{S_UART, M_UART};
 use core::fmt::{Error, Write};
 use spin::Mutex;
 
-pub struct Uart{
+pub struct Uart {
     base_address: usize,
 }
 
-impl Write for Uart{
-    fn write_str(&mut self, out: &str) -> Result<(), core::fmt::Error>{
-        for c in out.bytes(){
+impl Write for Uart {
+    fn write_str(&mut self, out: &str) -> Result<(), core::fmt::Error> {
+        for c in out.bytes() {
             self.put(c);
         }
 
@@ -17,46 +17,42 @@ impl Write for Uart{
     }
 }
 
-impl Uart{
-    pub const fn new(base_address: usize) -> Self{
-        Uart{
-            base_address
-        }
+impl Uart {
+    pub const fn new(base_address: usize) -> Self {
+        Uart { base_address }
     }
 
     pub fn init(&mut self) {
         let ptr = self.base_address as *mut u8;
-        unsafe{
-            ptr.add(3).write_volatile((1<<0) | (1 << 1));
-            ptr.add(2).write_volatile(1<<0);
-            ptr.add(1).write_volatile(1<<0);
-        
-            let div:u16 = 592;
-            let div_lsb:u8 = (div & 0xff).try_into().unwrap();
-            let div_msb:u8 = (div >> 8).try_into().unwrap();
-            
+        unsafe {
+            ptr.add(3).write_volatile((1 << 0) | (1 << 1));
+            ptr.add(2).write_volatile(1 << 0);
+            ptr.add(1).write_volatile(1 << 0);
+
+            let div: u16 = 592;
+            let div_lsb: u8 = (div & 0xff).try_into().unwrap();
+            let div_msb: u8 = (div >> 8).try_into().unwrap();
+
             let lcr = ptr.add(3).read_volatile();
             ptr.add(3).write_volatile(lcr);
         }
     }
 
-    pub fn put(&mut self, ch: u8){
+    pub fn put(&mut self, ch: u8) {
         let ptr = self.base_address as *mut u8;
-        unsafe{
+        unsafe {
             ptr.add(0).write_volatile(ch);
         }
     }
 
-    pub fn get(&mut self) -> Option<u8>{
+    pub fn get(&mut self) -> Option<u8> {
         let ptr = self.base_address as *mut u8;
-        unsafe{
+        unsafe {
             if ptr.add(5).read_volatile() & 1 == 0 {
                 None
-            }else{
+            } else {
                 Some(ptr.add(0).read_volatile())
             }
         }
     }
-
 }
-
