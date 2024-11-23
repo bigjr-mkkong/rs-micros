@@ -65,6 +65,12 @@ impl TrapFrame {
             cpuid: 0,
         }
     }
+
+    pub fn save_from(&mut self, src: &TrapFrame){
+        let self_trap_stack = self.trap_stack;
+        *self = *src;
+        self.trap_stack = self_trap_stack;
+    }
 }
 
 #[repr(usize)]
@@ -74,6 +80,10 @@ pub enum SATP_mode {
     Sv48 = 9,
     Sv57 = 10,
     Sv64 = 11,
+}
+
+pub const fn make_satp(satp_mode: SATP_mode, asid_val: usize, root_addr: usize) -> usize{
+    ((satp_mode as usize) << 60) | (asid_val << 44) | (root_addr >> 12)
 }
 
 pub fn satp_read() -> u64 {
@@ -86,7 +96,7 @@ pub fn satp_read() -> u64 {
 }
 
 pub fn satp_write(satp_mode: SATP_mode, asid_val: usize, root_addr: usize) {
-    let new_satp_val: usize = ((satp_mode as usize) << 60) | (asid_val << 44) | (root_addr >> 12);
+    let new_satp_val: usize = make_satp(satp_mode, asid_val, root_addr);
     unsafe {
         asm!("csrw satp, {0}", in(reg) new_satp_val);
     }

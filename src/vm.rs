@@ -80,7 +80,7 @@ impl PageEntry {
  * [x_xxxx_xxxx] [x_xxxx_xxxx] [x_xxxx_xxxx] [xxxx_xxxx_xxxx]
  *     VPN[2]       VPN[1]         VPN[0]         Offset
  */
-pub fn map(
+pub fn mem_map(
     root: &mut PageTable,
     vaddr: usize,
     paddr: usize,
@@ -126,7 +126,7 @@ pub fn map(
     Ok(())
 }
 
-pub fn unmap(root: &mut PageTable) -> Result<(), KError> {
+pub fn mem_unmap(root: &mut PageTable) -> Result<(), KError> {
     for lv2 in 0..PageTable::len() {
         let ref entry_lv2 = root.entries[lv2];
         if entry_lv2.is_valid() && entry_lv2.is_branch() {
@@ -190,7 +190,7 @@ pub fn ident_range_map(
     );
 
     for _ in 0..range_pgcnt {
-        map(root, addr_begin, addr_begin, bits, 0);
+        mem_map(root, addr_begin, addr_begin, bits, 0);
         addr_begin += page::PAGE_SIZE;
     }
 

@@ -160,6 +160,7 @@ extern "C" fn m_trap(
             }
             13 => {
                 println!("Load page fault at CPU#{}", hart);
+                panic!();
             }
             15 => {
                 println!("Store page fault at CPU#{}", hart);

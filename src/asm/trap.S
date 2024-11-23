@@ -4,10 +4,13 @@
 .global m_trap_vector
 s_trap_vector:
 # TODO:
-# sscratch should not contain KERNEL_TRAP_FRAME, since U-mode code return here
-# If S-mode handler need to use ECALL to M mode, we are overwrite the trap frame
-# Instead, sscratch should contain trap frame of current running process
+# sscratch keep the current-running task's trap frame, it lies in kmem space
+# and is safe to access through physical memory
     csrrw   s1, sscratch, s1
+
+    #disable memory translation
+    csrw    satp, x0 
+    sfence.vma
 
 # Save GP regs
     sd      x0,  0   * 8(s1)
@@ -66,7 +69,10 @@ s_trap_vector:
 
     csrw    sepc, a0
 
-# Ignore zero register
+# Load back task's satp value
+    ld      x1,  64  * 8(s1)
+    csrw    satp, x1
+
 # Load GP regs
     ld      x0,  0   * 8(s1)
     ld      x1,  1   * 8(s1)
@@ -102,6 +108,8 @@ s_trap_vector:
 
     csrrw   s1, sscratch, s1
 
+#refresh satp
+    sfence.vma
     sret
 
 

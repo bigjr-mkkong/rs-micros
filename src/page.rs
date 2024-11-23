@@ -64,7 +64,7 @@ impl page_allocator for naive_allocator {
         zone_start: usize,
         zone_end: usize,
         zone_size: usize,
-    ) -> Result<(), KError> {
+    ) -> Result<(usize, usize), KError> {
         //Pretty wild, but lets keep this since this is a **NAIVE** allocator
         println!("naive_Allocator Initializing");
         if zone_size < 3 * PAGE_SIZE {
@@ -116,7 +116,7 @@ impl page_allocator for naive_allocator {
 
         self.print_info();
 
-        Ok(())
+        Ok((self.map_begin, self.mem_begin))
     }
 
     fn alloc_pages(&mut self, pg_cnt: usize) -> Result<*mut u8, KError> {
@@ -303,9 +303,9 @@ impl page_allocator for empty_allocator {
         zone_start: usize,
         zone_end: usize,
         zone_size: usize,
-    ) -> Result<(), KError> {
+    ) -> Result<(usize, usize), KError> {
         println!("Placeholder Allocator Initializing");
-        Ok(())
+        Ok((0 as usize, 0 as usize))
     }
     fn alloc_pages(&mut self, pg_cnt: usize) -> Result<*mut u8, KError> {
         Err(new_kerror!(KErrorType::ENOSYS))

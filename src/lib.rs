@@ -46,6 +46,7 @@ use nobsp_kfunc::kmain as nobsp_kmain;
 use plic::{extint_name, extint_src, plic_controller, plic_ctx};
 use vm::{ident_range_map, virt2phys};
 use zone::{kfree_page, kmalloc_page, zone_type};
+use proc::task_struct;
 
 #[macro_export]
 macro_rules! print
@@ -125,10 +126,9 @@ extern "C" fn eh_func_kinit() -> usize {
 }
 
 #[no_mangle]
-extern "C" fn eh_func_kmain() {
-    let cpuid = which_cpu();
+extern "C" fn eh_func_kmain(cpuid: usize) {
     cpu::set_cpu_mode(cpu::Mode::Supervisor, cpuid);
-    let main_return = kmain();
+    let main_return = kmain(cpuid);
     if let Err(er_code) = main_return {
         println!("{}", er_code);
         println!("kmain() Failed, System halting now...");
@@ -199,6 +199,8 @@ pub static mut PLIC: plic_controller = plic_controller::new(plic::PLIC_BASE);
 pub static mut CLINT: clint_controller = clint_controller::new(clint::CLINT_BASE);
 pub static mut SECALL_FRAME: [ecall_args; cpu::MAX_HARTS] = [ecall_args::new(); cpu::MAX_HARTS];
 
+pub static mut pcb_khello: task_struct = task_struct::new();
+
 /*
  * TODO:
  * Lets wait Hubert's works bring no_std::vec here
@@ -216,7 +218,7 @@ fn kinit() -> Result<usize, KError> {
     /*
      * Setting up new zone
      */
-    SYS_ZONES[zone_type::ZONE_NORMAL.val()].lock().init(
+    let (meta_begin, meta_end) = SYS_ZONES[zone_type::ZONE_NORMAL.val()].lock().init(
         ptr::addr_of!(_heap_start),
         ptr::addr_of!(_heap_end),
         zone_type::ZONE_NORMAL,
@@ -287,6 +289,13 @@ fn kinit() -> Result<usize, KError> {
         vm::EntryBits::ReadWrite.val(),
     );
 
+    ident_range_map(
+        pageroot,
+        meta_begin,
+        meta_end,
+        vm::EntryBits::ReadWrite.val()
+    );
+
     //uart mmio area
     ident_range_map(
         pageroot,
@@ -335,7 +344,7 @@ fn kinit() -> Result<usize, KError> {
             KERNEL_TRAP_FRAME[cpu_cnt].cpuid = cpu_cnt;
 
             KERNEL_TRAP_FRAME[cpu_cnt].trap_stack =
-                kmalloc_page(zone_type::ZONE_NORMAL, 2)?.add(page::PAGE_SIZE);
+                kmalloc_page(zone_type::ZONE_NORMAL, 2)?.add(page::PAGE_SIZE * 2);
 
             ident_range_map(
                 pageroot,
@@ -385,6 +394,8 @@ fn kinit() -> Result<usize, KError> {
     unsafe {
         CLINT.set_mtimecmp(current_cpu, u64::MAX);
 
+        /*
+         * temporary close ext + timer for proc system testing
         mie::set_msoft();
 
         mie::set_mtimer();
@@ -406,7 +417,7 @@ fn kinit() -> Result<usize, KError> {
         PLIC.enable(plic_ctx::CORE1_M, &EXTINT_SRCS[10])?;
         PLIC.enable(plic_ctx::CORE2_M, &EXTINT_SRCS[10])?;
         PLIC.enable(plic_ctx::CORE3_M, &EXTINT_SRCS[10])?;
-
+        */
         mstatus::set_mpp(mstatus::MPP::Supervisor);
     }
 
@@ -423,17 +434,20 @@ fn kinit() -> Result<usize, KError> {
     Ok(0)
 }
 
-fn kmain() -> Result<(), KError> {
-    let current_cpu = which_cpu();
+fn kmain(current_cpu: usize) -> Result<(), KError> {
     println!("CPU#{} Switched to S mode", current_cpu);
 
-    unsafe {
-        asm!("ebreak");
+    // unsafe {
+    //     asm!("ebreak");
 
-        println!("CPU{} Back from trap\n", current_cpu);
-        CLINT.set_mtimecmp(current_cpu, CLINT.read_mtime() + 0x500_000);
-    }
+    //     println!("CPU{} Back from trap\n", current_cpu);
+    //     CLINT.set_mtimecmp(current_cpu, CLINT.read_mtime() + 0x500_000);
+    // }
 
+    let kmalloc_test = kmalloc_page(zone_type::ZONE_NORMAL, 1)?;
+    kfree_page(zone_type::ZONE_NORMAL, kmalloc_test);
+
+    println!("---------->>Start Process<<----------");
     loop {
         println!("CPU#{} kmain keep running...", current_cpu);
         let _ = cpu::busy_delay(1);
@@ -441,6 +455,13 @@ fn kmain() -> Result<(), KError> {
             asm!("nop");
         }
     }
+
+    
+    // unsafe{
+    //     pcb_khello.init()?;
+    //     pcb_khello.resume_from_S()
+    // }
+    Ok(())
 }
 
 pub mod allocator;

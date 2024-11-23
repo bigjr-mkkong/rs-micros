@@ -70,6 +70,7 @@ _start:
 3:
 
 #bsp switch to S-mode
+    csrr    a0, mhartid
     mret
 
     

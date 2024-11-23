@@ -26,7 +26,7 @@ impl page_allocator for Allocators {
         zone_start: usize,
         zone_end: usize,
         zone_size: usize,
-    ) -> Result<(), KError> {
+    ) -> Result<(usize, usize), KError> {
         match self {
             Allocators::EmptyAllocator(alloc) => {
                 alloc.allocator_init(zone_start, zone_end, zone_size)
@@ -82,7 +82,7 @@ pub trait page_allocator {
         zone_start: usize,
         zone_end: usize,
         zone_size: usize,
-    ) -> Result<(), KError>;
+    ) -> Result<(usize, usize), KError>;
     fn alloc_pages(&mut self, pg_cnt: usize) -> Result<*mut u8, KError>;
     fn free_pages(&mut self, addr: *mut u8) -> Result<(), KError>;
 }
@@ -114,7 +114,7 @@ impl mem_zone {
         _end: *const u8,
         _type: zone_type,
         allocator: AllocatorSelector,
-    ) -> Result<(), KError> {
+    ) -> Result<(usize, usize), KError> {
         self.begin_addr = _start as usize;
         self.end_addr = _end as usize;
         self.zone_size = (unsafe { _end.offset_from(_start) }) as usize;
@@ -123,10 +123,10 @@ impl mem_zone {
             AllocatorSelector::EmptyAllocator => Allocators::EmptyAllocator(empty_allocator::new()),
             AllocatorSelector::NaiveAllocator => Allocators::NaiveAllocator(naive_allocator::new()),
         };
-        allocator.allocator_init(_start as usize, _end as usize, self.zone_size)?;
+        let (meta_begin, meta_end) = allocator.allocator_init(_start as usize, _end as usize, self.zone_size)?;
 
         self.pg_allocator = Some(allocator);
-        Ok(())
+        Ok((meta_begin, meta_end))
     }
 
     pub fn get_size(&self) -> Result<usize, KError> {
