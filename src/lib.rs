@@ -444,8 +444,10 @@ fn kmain(current_cpu: usize) -> Result<(), KError> {
     //     CLINT.set_mtimecmp(current_cpu, CLINT.read_mtime() + 0x500_000);
     // }
 
-    let kmalloc_test = kmalloc_page(zone_type::ZONE_NORMAL, 1)?;
-    kfree_page(zone_type::ZONE_NORMAL, kmalloc_test);
+    unsafe{
+        pcb_khello.init()?;
+        pcb_khello.resume_from_S()
+    }
 
     println!("---------->>Start Process<<----------");
     loop {
@@ -457,10 +459,6 @@ fn kmain(current_cpu: usize) -> Result<(), KError> {
     }
 
     
-    // unsafe{
-    //     pcb_khello.init()?;
-    //     pcb_khello.resume_from_S()
-    // }
     Ok(())
 }
 

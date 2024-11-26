@@ -6,6 +6,7 @@ use crate::cpu::{get_cpu_mode,
     which_cpu,
     Mode,
     TrapFrame};
+use crate::kmem::{get_ksatp};
 use crate::KERNEL_TRAP_FRAME;
 use crate::vm::{PageTable, PageEntry, EntryBits, ident_range_map, mem_map};
 use crate::error::{KError, KErrorType};
@@ -62,6 +63,11 @@ impl task_struct {
         // };
         self.cpu = which_cpu();
         if let task_typ::KERN_TASK = self.typ {
+            self.trap_frame.satp = get_ksatp() as usize;
+            unsafe{
+                self.pc = KHello as usize;
+                self.pid = 0;
+            }
             //initialize kernel task
         }else{
             //initialize user task
@@ -183,6 +189,7 @@ impl task_struct {
 
             asm!("csrrw   s1, stval, s1");
 
+            asm!("sfence.vma");
             asm!("mret");
         }
     }
@@ -249,6 +256,8 @@ impl task_struct {
             asm!("csrw      satp, s1");
 
             asm!("csrrw   s1, stval, s1");
+
+            asm!("sfence.vma");
 
             asm!("sret");
         }
