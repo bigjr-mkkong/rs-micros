@@ -394,8 +394,6 @@ fn kinit() -> Result<usize, KError> {
     unsafe {
         CLINT.set_mtimecmp(current_cpu, u64::MAX);
 
-        /*
-         * temporary close ext + timer for proc system testing
         mie::set_msoft();
 
         mie::set_mtimer();
@@ -417,7 +415,6 @@ fn kinit() -> Result<usize, KError> {
         PLIC.enable(plic_ctx::CORE1_M, &EXTINT_SRCS[10])?;
         PLIC.enable(plic_ctx::CORE2_M, &EXTINT_SRCS[10])?;
         PLIC.enable(plic_ctx::CORE3_M, &EXTINT_SRCS[10])?;
-        */
         mstatus::set_mpp(mstatus::MPP::Supervisor);
     }
 
@@ -437,19 +434,19 @@ fn kinit() -> Result<usize, KError> {
 fn kmain(current_cpu: usize) -> Result<(), KError> {
     println!("CPU#{} Switched to S mode", current_cpu);
 
-    // unsafe {
-    //     asm!("ebreak");
+    unsafe {
+        asm!("ebreak");
 
-    //     println!("CPU{} Back from trap\n", current_cpu);
-    //     CLINT.set_mtimecmp(current_cpu, CLINT.read_mtime() + 0x500_000);
-    // }
+        println!("CPU{} Back from trap\n", current_cpu);
+        CLINT.set_mtimecmp(current_cpu, CLINT.read_mtime() + 0x500_000);
+    }
 
+    println!("---------->>Start Process<<----------");
     unsafe{
         pcb_khello.init()?;
         pcb_khello.resume_from_S()
     }
 
-    println!("---------->>Start Process<<----------");
     loop {
         println!("CPU#{} kmain keep running...", current_cpu);
         let _ = cpu::busy_delay(1);
