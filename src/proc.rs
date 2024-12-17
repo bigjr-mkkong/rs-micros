@@ -1,3 +1,4 @@
+use crate::{M_UART, S_UART};
 use crate::asm;
 use crate::cpu::{get_cpu_mode,
     mepc_read, mepc_write,
@@ -6,7 +7,7 @@ use crate::cpu::{get_cpu_mode,
     which_cpu,
     Mode,
     TrapFrame};
-use crate::kmem::{get_ksatp};
+use crate::kmem::{get_ksatp, get_page_table};
 use crate::KERNEL_TRAP_FRAME;
 use crate::vm::{PageTable, PageEntry, EntryBits, ident_range_map, mem_map};
 use crate::error::{KError, KErrorType};
@@ -64,11 +65,21 @@ impl task_struct {
         self.cpu = which_cpu();
         if let task_typ::KERN_TASK = self.typ {
             self.trap_frame.satp = get_ksatp() as usize;
+            let pageroot_ptr = get_page_table();
+            let mut pageroot = unsafe { pageroot_ptr.as_mut().unwrap() };
+            //initialize kernel task
             unsafe{
                 self.pc = KHello as usize;
                 self.pid = 0;
+
+                let kt_stack = kmalloc_page(zone_type::ZONE_NORMAL, 1)?.add(PAGE_SIZE * 1);
+                ident_range_map(pageroot, 
+                    kt_stack.sub(1 * PAGE_SIZE) as usize,
+                    kt_stack.sub(1 * PAGE_SIZE) as usize,
+                    EntryBits::ReadWrite.val());
+                self.trap_frame.regs[2] = kt_stack as usize;
             }
-            //initialize kernel task
+            
         }else{
             //initialize user task
             let pg_root_ptr = kmalloc_page(zone_type::ZONE_NORMAL, 1)? as *mut PageTable;
@@ -268,6 +279,7 @@ impl task_struct {
 
 #[no_mangle]
 extern "C" fn KHello(){
+    println!("Hello from KHello");
     loop{
         unsafe{
             asm!{
