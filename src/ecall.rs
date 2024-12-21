@@ -6,6 +6,7 @@ use riscv::asm::ecall;
 
 #[derive(Clone, Copy)]
 pub enum S2Mop {
+    TEST,
     UNDEF,
 }
 

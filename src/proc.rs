@@ -6,13 +6,16 @@ use crate::cpu::{get_cpu_mode,
     sscratch_write,
     which_cpu,
     Mode,
-    TrapFrame};
+    TrapFrame,
+    busy_delay, MAX_HARTS};
 use crate::kmem::{get_ksatp, get_page_table};
 use crate::KERNEL_TRAP_FRAME;
 use crate::vm::{PageTable, PageEntry, EntryBits, ident_range_map, mem_map};
 use crate::error::{KError, KErrorType};
 use crate::zone::{kfree_page, kmalloc_page, zone_type};
 use crate::page::{PAGE_SIZE};
+use crate::ecall;
+use crate::ecall::S2Mop;
 use riscv::register::{mstatus, sstatus};
 enum task_state {
     Ready,
@@ -280,11 +283,12 @@ impl task_struct {
 #[no_mangle]
 extern "C" fn KHello(){
     println!("Hello from KHello");
+    ecall::trapping(S2Mop::TEST, &[0, 0, 0, 0, 0]);
+    println!("Returned from ECALL");
     loop{
-        unsafe{
-            asm!{
-                "nop"
-            }
+        let _ = busy_delay(1);
+        unsafe {
+            asm!("nop");
         }
     }
 }

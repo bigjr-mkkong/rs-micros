@@ -147,7 +147,11 @@ extern "C" fn m_trap(
                     match opcode {
                         S2Mop::UNDEF => {
                             panic!("Supervisor is tring to call undefined operation");
+                        },
+                        S2Mop::TEST => {
+                            let x = 10;
                         }
+
                     }
                 }
                 pc_ret += 4;
