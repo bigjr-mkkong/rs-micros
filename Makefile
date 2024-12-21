@@ -13,6 +13,8 @@ CFLAGS=-Wall -Wextra -pedantic -Wextra -O0 -std=c++17 -g
 CFLAGS+=-static -ffreestanding -nostdlib -fno-rtti -fno-exceptions
 CFLAGS+=-march=rv64gc -mabi=lp64d
 
+KHEAP_MALLOC = src/kheap_malloc
+
 INCLUDES=
 LINKER_SCRIPT=-Tsrc/lds/virt.lds
 TYPE=debug
@@ -43,6 +45,7 @@ SERIAL=mon:stdio
 
 all:
 	cargo build
+	make -C $(KHEAP_MALLOC) all
 	$(CC) $(CFLAGS) $(LINKER_SCRIPT) $(INCLUDES) -o $(OUT) $(SOURCES_ASM) $(LIBS) $(LIB)
 	
 run: all dump
@@ -78,4 +81,4 @@ dump: all
 clean:
 	cargo clean
 	rm -f $(OUT) dump os.bin hdd.dsk
-
+	make -C $(KHEAP_MALLOC) clean
