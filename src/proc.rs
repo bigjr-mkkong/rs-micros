@@ -283,7 +283,7 @@ impl task_struct {
 #[no_mangle]
 extern "C" fn KHello(){
     println!("Hello from KHello");
-    ecall::trapping(S2Mop::TEST, &[0, 0, 0, 0, 0]);
+    ecall::trapping(S2Mop::TEST, &[0xdeadbeef, 0xbadc0de, 0xfea123, 0, 0]);
     println!("Returned from ECALL");
     loop{
         let _ = busy_delay(1);

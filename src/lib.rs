@@ -201,6 +201,12 @@ pub static mut SECALL_FRAME: [ecall_args; cpu::MAX_HARTS] = [ecall_args::new(); 
 
 pub static mut pcb_khello: task_struct = task_struct::new();
 
+pub static mut cust_hmalloc: spin_mutex<allocator::custom_kheap_malloc, S_lock> = 
+    spin_mutex::<allocator::custom_kheap_malloc, S_lock>::new(allocator::custom_kheap_malloc::new());
+
+#[global_allocator]
+pub static glob_alloc: allocator::kheap_alloc = allocator::kheap_alloc::new();
+
 /*
  * TODO:
  * Lets wait Hubert's works bring no_std::vec here
@@ -239,6 +245,10 @@ fn kinit() -> Result<usize, KError> {
 
     let kheap_begin = kmem::get_kheap_start();
     let kheap_pgcnt = kmem::get_kheap_pgcnt();
+
+    unsafe{
+        cust_hmalloc.lock().init(kheap_begin as usize, kheap_pgcnt * page::PAGE_SIZE);
+    }
 
     ident_range_map(
         pageroot,

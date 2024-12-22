@@ -149,7 +149,7 @@ extern "C" fn m_trap(
                             panic!("Supervisor is tring to call undefined operation");
                         },
                         S2Mop::TEST => {
-                            let x = 10;
+                            println!("M-ECALL executing");
                         }
 
                     }

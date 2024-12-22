@@ -21,6 +21,8 @@ TYPE=debug
 RUST_TARGET=./target/riscv64gc-unknown-none-elf/$(TYPE)
 LIBS=-L$(RUST_TARGET)
 SOURCES_ASM=$(wildcard src/asm/*.S)
+KHEAP_MALLOC = src/kheap_malloc/
+KHEAP_MALOC_OBJ = $(KHEAP_MALLOC)/kheap_malloc.o
 LIB= -lgcc -lrs_micros
 OUT=os.elf
 
@@ -46,7 +48,7 @@ SERIAL=mon:stdio
 all:
 	cargo build
 	make -C $(KHEAP_MALLOC) all
-	$(CC) $(CFLAGS) $(LINKER_SCRIPT) $(INCLUDES) -o $(OUT) $(SOURCES_ASM) $(LIBS) $(LIB)
+	$(CC) $(CFLAGS) $(LINKER_SCRIPT) $(INCLUDES) -o $(OUT) $(KHEAP_MALOC_OBJ) $(SOURCES_ASM) $(LIBS) $(LIB)
 	
 run: all dump
 	$(QEMU) \
