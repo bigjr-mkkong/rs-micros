@@ -1,21 +1,17 @@
-use crate::{M_UART, S_UART};
 use crate::asm;
-use crate::cpu::{get_cpu_mode,
-    mepc_read, mepc_write,
-    make_satp, satp_write, SATP_mode,
-    sscratch_write,
-    which_cpu,
-    Mode,
-    TrapFrame,
-    busy_delay, MAX_HARTS};
-use crate::kmem::{get_ksatp, get_page_table};
-use crate::KERNEL_TRAP_FRAME;
-use crate::vm::{PageTable, PageEntry, EntryBits, ident_range_map, mem_map};
-use crate::error::{KError, KErrorType};
-use crate::zone::{kfree_page, kmalloc_page, zone_type};
-use crate::page::{PAGE_SIZE};
+use crate::cpu::{
+    busy_delay, get_cpu_mode, make_satp, mepc_read, mepc_write, satp_write, sscratch_write,
+    which_cpu, Mode, SATP_mode, TrapFrame, MAX_HARTS,
+};
 use crate::ecall;
 use crate::ecall::S2Mop;
+use crate::error::{KError, KErrorType};
+use crate::kmem::{get_ksatp, get_page_table};
+use crate::page::PAGE_SIZE;
+use crate::vm::{ident_range_map, mem_map, EntryBits, PageEntry, PageTable};
+use crate::zone::{kfree_page, kmalloc_page, zone_type};
+use crate::KERNEL_TRAP_FRAME;
+use crate::{M_UART, S_UART};
 use riscv::register::{mstatus, sstatus};
 enum task_state {
     Ready,
@@ -44,9 +40,8 @@ pub struct task_struct {
 }
 
 impl task_struct {
-
-    pub const fn new() -> Self{
-        Self{
+    pub const fn new() -> Self {
+        Self {
             trap_frame: TrapFrame::new(),
             state: task_state::Ready,
             pc: 0 as usize,
@@ -56,7 +51,7 @@ impl task_struct {
         }
     }
 
-    pub fn init(&mut self) -> Result<usize, KError>{
+    pub fn init(&mut self) -> Result<usize, KError> {
         // let mut new_pcb = Self{
         //     trap_frame: TrapFrame::new(),
         //     state: task_state::Ready,
@@ -71,57 +66,63 @@ impl task_struct {
             let pageroot_ptr = get_page_table();
             let mut pageroot = unsafe { pageroot_ptr.as_mut().unwrap() };
             //initialize kernel task
-            unsafe{
+            unsafe {
                 self.pc = KHello as usize;
                 self.pid = 0;
 
                 let kt_stack = kmalloc_page(zone_type::ZONE_NORMAL, 1)?.add(PAGE_SIZE * 1);
-                ident_range_map(pageroot, 
+                ident_range_map(
+                    pageroot,
                     kt_stack.sub(1 * PAGE_SIZE) as usize,
                     kt_stack.sub(1 * PAGE_SIZE) as usize,
-                    EntryBits::ReadWrite.val());
+                    EntryBits::ReadWrite.val(),
+                );
                 self.trap_frame.regs[2] = kt_stack as usize;
             }
-            
-        }else{
+        } else {
             //initialize user task
             let pg_root_ptr = kmalloc_page(zone_type::ZONE_NORMAL, 1)? as *mut PageTable;
-            let pg_root = unsafe{pg_root_ptr.as_mut().unwrap()};
+            let pg_root = unsafe { pg_root_ptr.as_mut().unwrap() };
 
             let satp_root = pg_root_ptr as usize;
             self.trap_frame.satp = make_satp(SATP_mode::Sv39, 0, satp_root);
-            
-            unsafe{
+
+            unsafe {
                 self.pc = KHello as usize;
 
-                 // allocate trap stack
-                 let trap_stack = kmalloc_page(zone_type::ZONE_NORMAL, 2)?.add(PAGE_SIZE * 2);
-                 ident_range_map(pg_root,
-                         trap_stack.sub(2 * PAGE_SIZE) as usize,
-                         trap_stack as usize,
-                         EntryBits::ReadWrite.val());
+                // allocate trap stack
+                let trap_stack = kmalloc_page(zone_type::ZONE_NORMAL, 2)?.add(PAGE_SIZE * 2);
+                ident_range_map(
+                    pg_root,
+                    trap_stack.sub(2 * PAGE_SIZE) as usize,
+                    trap_stack as usize,
+                    EntryBits::ReadWrite.val(),
+                );
 
                 //allocate text segment
                 let text_mem = kmalloc_page(zone_type::ZONE_NORMAL, 1)? as *mut usize;
                 let prog_begin = self.pc as *mut usize;
                 prog_begin.copy_to_nonoverlapping(text_mem, 3);
-                mem_map(pg_root,
-                        self.pc,
-                        text_mem as usize,
-                        EntryBits::Execute.val(),
-                        0);
+                mem_map(
+                    pg_root,
+                    self.pc,
+                    text_mem as usize,
+                    EntryBits::Execute.val(),
+                    0,
+                );
 
                 //allocate execution stack
                 let exe_stack = kmalloc_page(zone_type::ZONE_NORMAL, 1)?.add(PAGE_SIZE * 1);
-                ident_range_map(pg_root, 
-                        exe_stack.sub(1 * PAGE_SIZE) as usize,
-                        exe_stack as usize,
-                        EntryBits::ReadWrite.val());
+                ident_range_map(
+                    pg_root,
+                    exe_stack.sub(1 * PAGE_SIZE) as usize,
+                    exe_stack as usize,
+                    EntryBits::ReadWrite.val(),
+                );
                 //setup SP
                 self.trap_frame.regs[2] = exe_stack as usize;
             }
         }
-
 
         Ok(0)
     }
@@ -208,7 +209,6 @@ impl task_struct {
         }
     }
 
-
     pub fn resume_from_S(&mut self) {
         let next_pc = self.pc;
         unsafe {
@@ -278,14 +278,12 @@ impl task_struct {
     }
 }
 
-
-
 #[no_mangle]
-extern "C" fn KHello(){
+extern "C" fn KHello() {
     println!("Hello from KHello");
     ecall::trapping(S2Mop::TEST, &[0xdeadbeef, 0xbadc0de, 0xfea123, 0, 0]);
     println!("Returned from ECALL");
-    loop{
+    loop {
         let _ = busy_delay(1);
         unsafe {
             asm!("nop");

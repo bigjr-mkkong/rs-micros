@@ -66,7 +66,7 @@ impl TrapFrame {
         }
     }
 
-    pub fn save_from(&mut self, src: &TrapFrame){
+    pub fn save_from(&mut self, src: &TrapFrame) {
         let self_trap_stack = self.trap_stack;
         *self = *src;
         self.trap_stack = self_trap_stack;
@@ -82,7 +82,7 @@ pub enum SATP_mode {
     Sv64 = 11,
 }
 
-pub const fn make_satp(satp_mode: SATP_mode, asid_val: usize, root_addr: usize) -> usize{
+pub const fn make_satp(satp_mode: SATP_mode, asid_val: usize, root_addr: usize) -> usize {
     ((satp_mode as usize) << 60) | (asid_val << 44) | (root_addr >> 12)
 }
 

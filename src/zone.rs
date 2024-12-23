@@ -123,7 +123,8 @@ impl mem_zone {
             AllocatorSelector::EmptyAllocator => Allocators::EmptyAllocator(empty_allocator::new()),
             AllocatorSelector::NaiveAllocator => Allocators::NaiveAllocator(naive_allocator::new()),
         };
-        let (meta_begin, meta_end) = allocator.allocator_init(_start as usize, _end as usize, self.zone_size)?;
+        let (meta_begin, meta_end) =
+            allocator.allocator_init(_start as usize, _end as usize, self.zone_size)?;
 
         self.pg_allocator = Some(allocator);
         Ok((meta_begin, meta_end))

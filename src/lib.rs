@@ -46,9 +46,9 @@ use error::{KError, KErrorType};
 use nobsp_kfunc::kinit as nobsp_kinit;
 use nobsp_kfunc::kmain as nobsp_kmain;
 use plic::{extint_name, extint_src, plic_controller, plic_ctx};
+use proc::task_struct;
 use vm::{ident_range_map, virt2phys};
 use zone::{kfree_page, kmalloc_page, zone_type};
-use proc::task_struct;
 
 #[macro_export]
 macro_rules! print
@@ -203,8 +203,12 @@ pub static mut SECALL_FRAME: [ecall_args; cpu::MAX_HARTS] = [ecall_args::new(); 
 
 pub static mut pcb_khello: task_struct = task_struct::new();
 
-pub static mut cust_hmalloc: spin_mutex<allocator::custom_kheap_malloc, S_lock> = 
-    spin_mutex::<allocator::custom_kheap_malloc, S_lock>::new(allocator::custom_kheap_malloc::new());
+pub static mut cust_hmalloc: spin_mutex<allocator::custom_kheap_malloc, S_lock> = spin_mutex::<
+    allocator::custom_kheap_malloc,
+    S_lock,
+>::new(
+    allocator::custom_kheap_malloc::new(),
+);
 
 #[global_allocator]
 pub static glob_alloc: allocator::kheap_alloc = allocator::kheap_alloc::new();
@@ -248,8 +252,10 @@ fn kinit() -> Result<usize, KError> {
     let kheap_begin = kmem::get_kheap_start();
     let kheap_pgcnt = kmem::get_kheap_pgcnt();
 
-    unsafe{
-        cust_hmalloc.lock().init(kheap_begin as usize, kheap_pgcnt * page::PAGE_SIZE);
+    unsafe {
+        cust_hmalloc
+            .lock()
+            .init(kheap_begin as usize, kheap_pgcnt * page::PAGE_SIZE);
     }
 
     ident_range_map(
@@ -305,7 +311,7 @@ fn kinit() -> Result<usize, KError> {
         pageroot,
         meta_begin,
         meta_end,
-        vm::EntryBits::ReadWrite.val()
+        vm::EntryBits::ReadWrite.val(),
     );
 
     //uart mmio area
@@ -453,13 +459,13 @@ fn kmain(current_cpu: usize) -> Result<(), KError> {
         CLINT.set_mtimecmp(current_cpu, CLINT.read_mtime() + 0x500_000);
     }
 
-    let k: alloc::vec::Vec<usize> = alloc::vec![1, 2, 3];
-    for i in k.iter(){
+    let k = alloc::vec![1, 2, 3];
+    for i in k.iter() {
         println!("{}", i);
     }
 
     println!("---------->>Start Process<<----------");
-    unsafe{
+    unsafe {
         pcb_khello.init()?;
         pcb_khello.resume_from_S()
     }
@@ -472,7 +478,6 @@ fn kmain(current_cpu: usize) -> Result<(), KError> {
         }
     }
 
-    
     Ok(())
 }
 
