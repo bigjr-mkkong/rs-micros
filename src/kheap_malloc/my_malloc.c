@@ -253,7 +253,7 @@ void *MyMalloc(usize size){
 }
 
 usize kheap_malloc(usize sz, usize align){
-    if (align < sizeof(void*) || (align & (align - 1)) != 0) {
+    if ((align < sizeof(void*)) || (align & (align - 1)) != 0) {
         return 0;
     }
 

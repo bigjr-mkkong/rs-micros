@@ -51,4 +51,53 @@ unsafe impl GlobalAlloc for kheap_alloc {
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         cust_hmalloc.lock().dealloc(ptr, layout)
     }
+
+    unsafe fn realloc(
+    &self,
+    ptr: *mut u8,
+    layout: Layout,
+    new_size: usize) -> *mut u8 {
+
+    if new_size == 0 {
+        self.dealloc(ptr, layout);
+        return core::ptr::null_mut();
+    }
+
+    if ptr.is_null() {
+        return self.alloc(Layout::from_size_align(new_size, layout.align()).unwrap());
+    }
+
+    let new_layout = Layout::from_size_align(new_size, layout.align());
+    let new_ptr = match new_layout {
+        Ok(layout) => self.alloc(layout),
+        Err(_) => return core::ptr::null_mut(),
+    };
+
+    if new_ptr.is_null() {
+        return core::ptr::null_mut();
+    }
+
+    let copy_size = core::cmp::min(layout.size(), new_size);
+    core::ptr::copy_nonoverlapping(ptr, new_ptr, copy_size);
+
+    self.dealloc(ptr, layout);
+
+    new_ptr
+}
+
+unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+    // Allocate memory
+    let ptr = self.alloc(layout);
+
+    // If allocation failed, return null
+    if ptr.is_null() {
+        return core::ptr::null_mut();
+    }
+
+    // Zero the memory
+    core::ptr::write_bytes(ptr, 0, layout.size());
+
+    ptr
+}
+
 }

@@ -4,6 +4,8 @@
 #![allow(non_snake_case)]
 #![feature(variant_count)]
 
+extern crate alloc;
+
 extern "C" {
     static _heap_start: u8;
     static _heap_end: u8;
@@ -449,6 +451,11 @@ fn kmain(current_cpu: usize) -> Result<(), KError> {
 
         println!("CPU{} Back from trap\n", current_cpu);
         CLINT.set_mtimecmp(current_cpu, CLINT.read_mtime() + 0x500_000);
+    }
+
+    let k: alloc::vec::Vec<usize> = alloc::vec![1, 2, 3];
+    for i in k.iter(){
+        println!("{}", i);
     }
 
     println!("---------->>Start Process<<----------");
