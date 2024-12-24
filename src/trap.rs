@@ -64,6 +64,8 @@ extern "C" fn m_trap(
     let cause_num = xcause & 0xfff;
     let mut pc_ret: usize = xepc;
 
+    let mut cdump_flag: bool = false;
+
     if is_async {
         match cause_num {
             3 => {
@@ -99,22 +101,23 @@ extern "C" fn m_trap(
                 }
             }
             _ => {
-                panic!("Unhandled async trap on CPU#{}", hart);
+                println!("Unhandled async trap on CPU#{}", hart);
+                cdump_flag = true;
             }
         }
     } else {
         match cause_num {
             0 => {
                 println!("Instruction Address Misaligned at CPU#{}\n", hart);
-                panic!();
+                cdump_flag = true;
             }
             1 => {
                 println!("Instruction Access Fault at CPU#{}\n", hart);
-                panic!();
+                cdump_flag = true;
             }
             2 => {
                 println!("Illegal instruction at CPU#{}\n", hart);
-                panic!();
+                cdump_flag = true;
             }
             3 => {
                 // println!("Breakpoint Trap at CPU#{}\n", hart);
@@ -122,19 +125,19 @@ extern "C" fn m_trap(
             }
             4 => {
                 println!("Load Address Misaligned at CPU#{}\n", hart);
-                panic!();
+                cdump_flag = true;
             }
             5 => {
                 println!("Load Access Fault at CPU#{}\n", hart);
-                panic!();
+                cdump_flag = true;
             }
             6 => {
                 println!("Store/AMO Address Misaligned at CPU#{}\n", hart);
-                panic!();
+                cdump_flag = true;
             }
             7 => {
                 println!("Store/AMO Access Fault at CPU#{}\n", hart);
-                panic!();
+                cdump_flag = true;
             }
             8 => {
                 println!("E-call from User mode at CPU#{}", hart);
@@ -160,10 +163,11 @@ extern "C" fn m_trap(
             }
             12 => {
                 println!("Instruction page fault at CPU#{}", hart);
+                cdump_flag = true;
             }
             13 => {
                 println!("Load page fault at CPU#{}", hart);
-                panic!();
+                cdump_flag = true;
             }
             15 => {
                 println!("Store page fault at CPU#{}", hart);
@@ -171,14 +175,25 @@ extern "C" fn m_trap(
             }
             _ => {
                 println!("Unhandled sync trap at CPU#{}\n", hart);
-                panic!();
+                cdump_flag = true;
             }
         }
-        /*
-         * TODO
-         * Implement reg_dump on print trap CSRs
-         */
-        // reg_dump();
+        
+        if cdump_flag == true{
+            println!("
+>>>>>>Core Dump<<<<<<
+---------------------
+CPU {} 
+Trapped instruction: 0x{:x}
+xtval: 0x{:x}
+xstatus: 0x{:x}
+---------------------",
+            hart,
+            xepc,
+            xtval,
+            xstatus);
+            panic!();
+        }
     }
 
     set_cpu_mode(mpp, hart);

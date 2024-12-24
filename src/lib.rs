@@ -49,6 +49,7 @@ use plic::{extint_name, extint_src, plic_controller, plic_ctx};
 use proc::task_struct;
 use vm::{ident_range_map, virt2phys};
 use zone::{kfree_page, kmalloc_page, zone_type};
+use alloc::vec::Vec;
 
 #[macro_export]
 macro_rules! print
@@ -148,7 +149,9 @@ extern "C" fn eh_func_kinit_nobsp() -> usize {
     unsafe {
         cpu::mscratch_write((&mut KERNEL_TRAP_FRAME[cpuid] as *mut TrapFrame) as usize);
         cpu::sscratch_write(cpu::mscratch_read());
+        KERNEL_TRAP_FRAME[cpuid].cpuid = cpuid;
     }
+    cpu::set_cpu_mode(cpu::Mode::Machine, cpuid);
     let init_return = nobsp_kinit();
     if let Err(er_code) = init_return {
         println!("{}", er_code);
@@ -169,6 +172,7 @@ extern "C" fn eh_func_kinit_nobsp() -> usize {
 #[no_mangle]
 pub extern "C" fn eh_func_nobsp_kmain() {
     let main_return = nobsp_kmain();
+    cpu::set_cpu_mode(cpu::Mode::Supervisor, which_cpu());
     if let Err(er_code) = main_return {
         println!("{}", er_code);
         println!("kmain() Failed, System halting now...");
@@ -201,8 +205,6 @@ pub static mut PLIC: plic_controller = plic_controller::new(plic::PLIC_BASE);
 pub static mut CLINT: clint_controller = clint_controller::new(clint::CLINT_BASE);
 pub static mut SECALL_FRAME: [ecall_args; cpu::MAX_HARTS] = [ecall_args::new(); cpu::MAX_HARTS];
 
-pub static mut pcb_khello: task_struct = task_struct::new();
-
 pub static mut cust_hmalloc: spin_mutex<allocator::custom_kheap_malloc, S_lock> = spin_mutex::<
     allocator::custom_kheap_malloc,
     S_lock,
@@ -218,6 +220,8 @@ pub static glob_alloc: allocator::kheap_alloc = allocator::kheap_alloc::new();
  * Lets wait Hubert's works bring no_std::vec here
  */
 pub static mut EXTINT_SRCS: [extint_src; plic::MAX_INTCNT] = [extint_src::new(); plic::MAX_INTCNT];
+
+pub static mut pcb_khello: task_struct = task_struct::new();
 
 fn kinit() -> Result<usize, KError> {
     M_UART.lock().init();
@@ -459,7 +463,7 @@ fn kmain(current_cpu: usize) -> Result<(), KError> {
         CLINT.set_mtimecmp(current_cpu, CLINT.read_mtime() + 0x500_000);
     }
 
-    let k = alloc::vec![1, 2, 3];
+    let k = alloc::vec![1, 2, 3, 4, 5];
     for i in k.iter() {
         println!("{}", i);
     }

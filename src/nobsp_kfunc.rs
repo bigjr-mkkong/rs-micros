@@ -13,6 +13,7 @@ use crate::plic::{extint_name, extint_src, plic_controller, plic_ctx};
 use crate::vm::{ident_range_map, virt2phys};
 use crate::zone::{kfree_page, kmalloc_page, zone_type};
 use crate::CLINT;
+use crate::pcb_khello;
 
 use crate::{cpu, kmem, vm, KERNEL_TRAP_FRAME, M_UART, S_UART};
 
@@ -70,6 +71,11 @@ pub fn kmain() -> Result<(), KError> {
         println!("CPU{} Back from trap\n", current_cpu);
         CLINT.set_mtimecmp(current_cpu, CLINT.read_mtime() + 0x500_000);
     }
+
+    // unsafe {
+    //     pcb_khello.init()?;
+    //     pcb_khello.resume_from_S()
+    // }
 
     loop {
         println!("CPU#{} kmain keep running...", current_cpu);

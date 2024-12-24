@@ -61,6 +61,7 @@ impl task_struct {
         //     typ: task_typ::KERN_TASK
         // };
         self.cpu = which_cpu();
+        self.trap_frame.cpuid = self.cpu;
         if let task_typ::KERN_TASK = self.typ {
             self.trap_frame.satp = get_ksatp() as usize;
             let pageroot_ptr = get_page_table();
@@ -280,9 +281,9 @@ impl task_struct {
 
 #[no_mangle]
 extern "C" fn KHello() {
-    println!("Hello from KHello");
-    ecall::trapping(S2Mop::TEST, &[0xdeadbeef, 0xbadc0de, 0xfea123, 0, 0]);
-    println!("Returned from ECALL");
+    println!("Hello from KHello at CPU{}", which_cpu());
+    // ecall::trapping(S2Mop::TEST, &[0xdeadbeef, 0xbadc0de, 0xfea123, 0, 0]);
+    // println!("Returned from ECALL");
     loop {
         let _ = busy_delay(1);
         unsafe {
