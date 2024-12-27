@@ -1,3 +1,5 @@
+use crate::alloc::boxed::Box;
+use crate::alloc::vec::Vec;
 use crate::asm;
 use crate::cpu::{
     busy_delay, get_cpu_mode, make_satp, mepc_read, mepc_write, satp_write, sscratch_write,
@@ -6,17 +8,15 @@ use crate::cpu::{
 use crate::ecall;
 use crate::ecall::S2Mop;
 use crate::error::{KError, KErrorType};
-use crate::new_kerror;
 use crate::kmem::{get_ksatp, get_page_table};
+use crate::new_kerror;
 use crate::page::PAGE_SIZE;
 use crate::vm::{ident_range_map, mem_map, EntryBits, PageEntry, PageTable};
 use crate::zone::{kfree_page, kmalloc_page, zone_type};
 use crate::KERNEL_TRAP_FRAME;
 use crate::{M_UART, S_UART};
-use riscv::register::{mstatus, sstatus};
-use crate::alloc::vec::Vec;
 use core::cell::UnsafeCell;
-use crate::alloc::boxed::Box;
+use riscv::register::{mstatus, sstatus};
 
 #[derive(Clone, Copy)]
 enum task_state {
@@ -47,9 +47,7 @@ pub struct task_struct {
     typ: task_typ,
 }
 
-
-
-// pub static mut TASK_POOL: [Option<Box<Vec<task_struct>>>; MAX_HARTS] = 
+// pub static mut TASK_POOL: [Option<Box<Vec<task_struct>>>; MAX_HARTS] =
 // {
 //     const none_taskcell: Option<Box<Vec<task_struct>>> = None;
 //     [none_taskcell; MAX_HARTS]
@@ -294,18 +292,15 @@ impl task_struct {
     }
 }
 
-
-
-
-pub struct task_pool{
+pub struct task_pool {
     POOL: [Option<Box<Vec<task_struct>>>; MAX_HARTS],
     onlline_cpu_cnt: usize,
-    next_task: [Option<usize>; MAX_HARTS]
+    next_task: [Option<usize>; MAX_HARTS],
 }
 
-impl task_pool{
-    pub const fn new() -> Self{
-        Self{
+impl task_pool {
+    pub const fn new() -> Self {
+        Self {
             POOL: [None, None, None, None],
             onlline_cpu_cnt: MAX_HARTS,
             next_task: [None, None, None, None],
@@ -313,41 +308,39 @@ impl task_pool{
     }
 
     pub fn init(&mut self, cpucnt: usize) {
-        for cpuid in 0..cpucnt{
-            for (i, mut e) in self.POOL.iter_mut().enumerate(){
+        for cpuid in 0..cpucnt {
+            for (i, mut e) in self.POOL.iter_mut().enumerate() {
                 *e = Some(Box::new(Vec::new()));
             }
             self.next_task[cpuid] = Some(0);
         }
     }
 
-    pub fn append_task(&mut self, new_task: &task_struct, cpuid: usize) -> Result<(), KError>{
-        
+    pub fn append_task(&mut self, new_task: &task_struct, cpuid: usize) -> Result<(), KError> {
         if let Some(boxvec) = &mut self.POOL[cpuid] {
             boxvec.push(*new_task);
-        }else{
+        } else {
             return Err(new_kerror!(KErrorType::EINVAL));
         }
-        
+
         Ok(())
     }
 
-    pub fn sched(&mut self, cpuid: usize) -> Result<(), KError>{
+    pub fn sched(&mut self, cpuid: usize) -> Result<(), KError> {
         if let Some(cur_taskidx) = self.next_task[cpuid] {
             match self.POOL[cpuid] {
                 Some(ref mut taskvec) => {
-                    
                     //Round Robin
                     self.next_task[cpuid] = Some((cur_taskidx + 1) % taskvec.len());
 
-                    if let Mode::Machine = get_cpu_mode(cpuid){
+                    if let Mode::Machine = get_cpu_mode(cpuid) {
                         taskvec[cur_taskidx].resume_from_M();
                         Ok(())
-                    }else{
+                    } else {
                         taskvec[cur_taskidx].resume_from_S();
                         Ok(())
                     }
-                },
+                }
                 None => {
                     return Err(new_kerror!(KErrorType::EINVAL));
                 }

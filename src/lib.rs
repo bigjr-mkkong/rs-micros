@@ -39,18 +39,18 @@ use spin::Mutex;
 
 use crate::lock::spin_mutex;
 use crate::lock::{M_lock, S_lock};
+use alloc::vec::Vec;
 use clint::clint_controller;
 use cpu::{get_cpu_mode, which_cpu, SATP_mode, TrapFrame};
 use ecall::{ecall_args, S2Mop};
 use error::{KError, KErrorType};
+use ktask::KHello_cpu0;
 use nobsp_kfunc::kinit as nobsp_kinit;
 use nobsp_kfunc::kmain as nobsp_kmain;
 use plic::{extint_name, extint_src, plic_controller, plic_ctx};
-use proc::{task_struct, task_pool};
+use proc::{task_pool, task_struct};
 use vm::{ident_range_map, virt2phys};
 use zone::{kfree_page, kmalloc_page, zone_type};
-use ktask::{KHello_cpu0};
-use alloc::vec::Vec;
 
 #[macro_export]
 macro_rules! print
@@ -219,7 +219,6 @@ pub static glob_alloc: allocator::kheap_alloc = allocator::kheap_alloc::new();
 pub static mut EXTINT_SRCS: [extint_src; plic::MAX_INTCNT] = [extint_src::new(); plic::MAX_INTCNT];
 
 pub static mut TASK_POOL: task_pool = task_pool::new();
-
 
 fn kinit() -> Result<usize, KError> {
     M_UART.lock().init();
@@ -496,6 +495,7 @@ pub mod cpu;
 pub mod ecall;
 pub mod error;
 pub mod kmem;
+pub mod ktask;
 pub mod lock;
 pub mod nobsp_kfunc;
 pub mod page;
@@ -505,4 +505,3 @@ pub mod trap;
 pub mod uart;
 pub mod vm;
 pub mod zone;
-pub mod ktask;

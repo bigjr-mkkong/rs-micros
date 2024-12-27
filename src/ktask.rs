@@ -1,9 +1,9 @@
-use crate::{M_UART, S_UART};
 use crate::asm;
 use crate::cpu::{
     busy_delay, get_cpu_mode, make_satp, mepc_read, mepc_write, satp_write, sscratch_write,
     which_cpu, Mode, SATP_mode, TrapFrame, MAX_HARTS,
 };
+use crate::{M_UART, S_UART};
 
 #[no_mangle]
 pub extern "C" fn KHello_cpu0() {

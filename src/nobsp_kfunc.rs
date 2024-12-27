@@ -6,16 +6,16 @@ use spin::Mutex;
 
 use crate::cpu::{which_cpu, SATP_mode, TrapFrame};
 use crate::error::{KError, KErrorType};
+use crate::ktask::KHello_cpu1;
 use crate::lock::spin_mutex;
 use crate::lock::{M_lock, S_lock};
 use crate::page;
 use crate::plic::{extint_name, extint_src, plic_controller, plic_ctx};
+use crate::proc::task_struct;
 use crate::vm::{ident_range_map, virt2phys};
 use crate::zone::{kfree_page, kmalloc_page, zone_type};
 use crate::CLINT;
-use crate::ktask::KHello_cpu1;
 use crate::TASK_POOL;
-use crate::proc::task_struct;
 
 use crate::{cpu, kmem, vm, KERNEL_TRAP_FRAME, M_UART, S_UART};
 

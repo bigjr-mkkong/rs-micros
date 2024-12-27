@@ -178,9 +178,10 @@ extern "C" fn m_trap(
                 cdump_flag = true;
             }
         }
-        
-        if cdump_flag == true{
-            println!("
+
+        if cdump_flag == true {
+            println!(
+                "
 >>>>>>Core Dump<<<<<<
 ---------------------
 CPU {} 
@@ -188,10 +189,8 @@ Trapped instruction: 0x{:x}
 xtval: 0x{:x}
 xstatus: 0x{:x}
 ---------------------",
-            hart,
-            xepc,
-            xtval,
-            xstatus);
+                hart, xepc, xtval, xstatus
+            );
             panic!();
         }
     }
