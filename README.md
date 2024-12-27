@@ -37,6 +37,7 @@ To hang qemu before receive gdb client connection
   - [x] Kthread
   - [x] Ecall from kthread
   - [x] Task pool & round-robin scheduler
+  - [ ] More tests on multi-core schedule
 
   **. . .**
 
