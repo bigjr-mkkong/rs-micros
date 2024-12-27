@@ -46,7 +46,7 @@ use error::{KError, KErrorType};
 use nobsp_kfunc::kinit as nobsp_kinit;
 use nobsp_kfunc::kmain as nobsp_kmain;
 use plic::{extint_name, extint_src, plic_controller, plic_ctx};
-use proc::task_struct;
+use proc::{task_struct, task_pool};
 use vm::{ident_range_map, virt2phys};
 use zone::{kfree_page, kmalloc_page, zone_type};
 use alloc::vec::Vec;
@@ -215,13 +215,10 @@ pub static mut cust_hmalloc: spin_mutex<allocator::custom_kheap_malloc, S_lock> 
 #[global_allocator]
 pub static glob_alloc: allocator::kheap_alloc = allocator::kheap_alloc::new();
 
-/*
- * TODO:
- * Lets wait Hubert's works bring no_std::vec here
- */
 pub static mut EXTINT_SRCS: [extint_src; plic::MAX_INTCNT] = [extint_src::new(); plic::MAX_INTCNT];
 
-pub static mut pcb_khello: task_struct = task_struct::new();
+pub static mut TASK_POOL: task_pool = task_pool::new();
+
 
 fn kinit() -> Result<usize, KError> {
     M_UART.lock().init();
@@ -470,8 +467,15 @@ fn kmain(current_cpu: usize) -> Result<(), KError> {
 
     println!("---------->>Start Process<<----------");
     unsafe {
-        pcb_khello.init()?;
-        pcb_khello.resume_from_S()
+        TASK_POOL.init(cpu::MAX_HARTS);
+
+        let mut pcb_khello: task_struct = task_struct::new();
+        let sched_cpu = which_cpu();
+
+        pcb_khello.init();
+
+        TASK_POOL.append_task(&pcb_khello, sched_cpu)?;
+        TASK_POOL.sched(sched_cpu)?;
     }
 
     loop {
