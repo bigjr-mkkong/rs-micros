@@ -32,7 +32,11 @@ To hang qemu before receive gdb client connection
   - [x] VM under S-mode
   - [x] Trap frame
   - [x] CLINT Timer
-  - [x] PLIC 
+  - [x] PLIC
+  - [x] Small-object allocator(freelist version)
+  - [x] Kthread
+  - [x] Ecall from kthread
+  - [x] Task pool & round-robin scheduler
 
   **. . .**
 
@@ -40,7 +44,8 @@ To hang qemu before receive gdb client connection
 There are many TODOs in src code, but here are some general things:
   - [x] ISA abstraction(Use `riscv` crate replace most inline asm)
   - [x] Proper logging system for multi-core
-  - [ ] CPU dumper inside trap code
+  - [x] CPU dumper inside trap code
   - [ ] `fsd` and `fld` would report illegal instruction error
-  - [ ] Slub(or any kinds of small object allocator) allocator for kheap
-  - [ ] Kernel threads and kernel semaphore
+  - [x] Slub(or any kinds of small object allocator) allocator for kheap
+  - [x] Kernel threads
+  - [ ] kernel semaphore
