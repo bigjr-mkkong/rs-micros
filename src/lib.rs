@@ -49,6 +49,7 @@ use plic::{extint_name, extint_src, plic_controller, plic_ctx};
 use proc::{task_struct, task_pool};
 use vm::{ident_range_map, virt2phys};
 use zone::{kfree_page, kmalloc_page, zone_type};
+use ktask::{KHello_cpu0};
 use alloc::vec::Vec;
 
 #[macro_export]
@@ -472,7 +473,7 @@ fn kmain(current_cpu: usize) -> Result<(), KError> {
         let mut pcb_khello: task_struct = task_struct::new();
         let sched_cpu = which_cpu();
 
-        pcb_khello.init();
+        pcb_khello.init(KHello_cpu0 as usize);
 
         TASK_POOL.append_task(&pcb_khello, sched_cpu)?;
         TASK_POOL.sched(sched_cpu)?;
@@ -504,3 +505,4 @@ pub mod trap;
 pub mod uart;
 pub mod vm;
 pub mod zone;
+pub mod ktask;

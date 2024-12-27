@@ -66,7 +66,7 @@ impl task_struct {
         }
     }
 
-    pub fn init(&mut self) -> Result<usize, KError> {
+    pub fn init(&mut self, func: usize) -> Result<usize, KError> {
         // let mut new_pcb = Self{
         //     trap_frame: TrapFrame::new(),
         //     state: task_state::Ready,
@@ -83,7 +83,7 @@ impl task_struct {
             let mut pageroot = unsafe { pageroot_ptr.as_mut().unwrap() };
             //initialize kernel task
             unsafe {
-                self.pc = KHello as usize;
+                self.pc = func;
                 self.pid = 0;
 
                 let kt_stack = kmalloc_page(zone_type::ZONE_NORMAL, 1)?.add(PAGE_SIZE * 1);
@@ -104,7 +104,7 @@ impl task_struct {
             self.trap_frame.satp = make_satp(SATP_mode::Sv39, 0, satp_root);
 
             unsafe {
-                self.pc = KHello as usize;
+                self.pc = func;
 
                 // allocate trap stack
                 let trap_stack = kmalloc_page(zone_type::ZONE_NORMAL, 2)?.add(PAGE_SIZE * 2);
@@ -294,18 +294,6 @@ impl task_struct {
     }
 }
 
-#[no_mangle]
-extern "C" fn KHello() {
-    println!("Hello from KHello at CPU{}", which_cpu());
-    // ecall::trapping(S2Mop::TEST, &[0xdeadbeef, 0xbadc0de, 0xfea123, 0, 0]);
-    // println!("Returned from ECALL");
-    loop {
-        let _ = busy_delay(1);
-        unsafe {
-            asm!("nop");
-        }
-    }
-}
 
 
 

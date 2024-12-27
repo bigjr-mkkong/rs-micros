@@ -13,6 +13,9 @@ use crate::plic::{extint_name, extint_src, plic_controller, plic_ctx};
 use crate::vm::{ident_range_map, virt2phys};
 use crate::zone::{kfree_page, kmalloc_page, zone_type};
 use crate::CLINT;
+use crate::ktask::KHello_cpu1;
+use crate::TASK_POOL;
+use crate::proc::task_struct;
 
 use crate::{cpu, kmem, vm, KERNEL_TRAP_FRAME, M_UART, S_UART};
 
@@ -69,6 +72,12 @@ pub fn kmain() -> Result<(), KError> {
 
         println!("CPU{} Back from trap\n", current_cpu);
         CLINT.set_mtimecmp(current_cpu, CLINT.read_mtime() + 0x500_000);
+
+        let mut khello_task: task_struct = task_struct::new();
+        khello_task.init(KHello_cpu1 as usize);
+
+        TASK_POOL.append_task(&khello_task, 1);
+        TASK_POOL.sched(1);
     }
 
     loop {
