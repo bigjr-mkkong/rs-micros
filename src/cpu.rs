@@ -66,7 +66,15 @@ impl TrapFrame {
         }
     }
 
-    pub fn save_from(&mut self, src: &TrapFrame) {
+    pub fn copy_from(&mut self, src: &TrapFrame) {
+        *self = *src;
+    }
+
+    /*
+     * refresh_from() will keep origial trap_stack unchange so it only update
+     * register value
+     */
+    pub fn refresh_from(&mut self, src: &TrapFrame) {
         let self_trap_stack = self.trap_stack;
         *self = *src;
         self.trap_stack = self_trap_stack;

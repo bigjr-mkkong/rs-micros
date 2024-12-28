@@ -1,10 +1,13 @@
 use crate::cpu::{busy_delay, set_cpu_mode, M_cli, M_sti, Mode, TrapFrame};
 use crate::plic;
+use crate::proc::{task_pool, task_struct};
 use crate::EXTINT_SRCS;
 use crate::SECALL_FRAME;
+use crate::TASK_POOL;
 use crate::{ecall_args, S2Mop};
 use crate::{CLINT, PLIC};
 use crate::{M_UART, S_UART};
+
 use riscv::register;
 use riscv::register::{mstatus, mstatus::MPP, sstatus, sstatus::SPP};
 
@@ -152,7 +155,10 @@ extern "C" fn m_trap(
                             panic!("Supervisor is tring to call undefined operation");
                         }
                         S2Mop::TEST => {
+                            TASK_POOL.save_from_ktrapframe(hart);
+                            TASK_POOL.set_currentPC(hart, pc_ret + 4);
                             println!("M-ECALL executing");
+                            TASK_POOL.sched(hart);
                         }
                     }
                 }

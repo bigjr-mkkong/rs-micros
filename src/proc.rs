@@ -2,8 +2,8 @@ use crate::alloc::boxed::Box;
 use crate::alloc::vec::Vec;
 use crate::asm;
 use crate::cpu::{
-    busy_delay, get_cpu_mode, make_satp, mepc_read, mepc_write, satp_write, sscratch_write,
-    which_cpu, Mode, SATP_mode, TrapFrame, MAX_HARTS,
+    busy_delay, get_cpu_mode, make_satp, mepc_read, mepc_write, mscratch_write, satp_write,
+    sscratch_write, which_cpu, Mode, SATP_mode, TrapFrame, MAX_HARTS,
 };
 use crate::ecall;
 use crate::ecall::S2Mop;
@@ -91,7 +91,18 @@ impl task_struct {
                     kt_stack.sub(1 * PAGE_SIZE) as usize,
                     EntryBits::ReadWrite.val(),
                 );
+
+                let kt_expstack = kmalloc_page(zone_type::ZONE_NORMAL, 1)?.add(PAGE_SIZE * 1);
+                ident_range_map(
+                    pageroot,
+                    kt_expstack.sub(1 * PAGE_SIZE) as usize,
+                    kt_expstack.sub(1 * PAGE_SIZE) as usize,
+                    EntryBits::ReadWrite.val(),
+                );
+
+                self.trap_frame.trap_stack = kt_expstack;
                 self.trap_frame.regs[2] = kt_stack as usize;
+                self.trap_frame.satp = get_ksatp() as usize;
             }
         } else {
             //initialize user task
@@ -151,9 +162,13 @@ impl task_struct {
         let cur_cpu = self.cpu;
         unsafe {
             //switch to kernel trap frame
-            sscratch_write((&KERNEL_TRAP_FRAME[cur_cpu] as *const TrapFrame) as usize);
-            self.trap_frame.save_from(&KERNEL_TRAP_FRAME[cur_cpu]);
+            // sscratch_write((&KERNEL_TRAP_FRAME[cur_cpu] as *const TrapFrame) as usize);
+            self.trap_frame.refresh_from(&KERNEL_TRAP_FRAME[cur_cpu]);
         }
+    }
+
+    pub fn set_pc(&mut self, newpc: usize) {
+        self.pc = newpc;
     }
 
     pub fn resume_from_M(&mut self) {
@@ -171,6 +186,12 @@ impl task_struct {
             let task_s1val = KERNEL_TRAP_FRAME[self.cpu].regs[8];
 
             sscratch_write(tasktrap_addr as usize);
+
+            /*
+             * resume_from_M only callable from M mode trap handler,
+             * this line is responsible to restore the original mscratch value(KERNEL_TRAP)
+             */
+            mscratch_write((&mut KERNEL_TRAP_FRAME[self.cpu] as *mut TrapFrame) as usize);
 
             asm!("csrw  mepc, {0}", in(reg) next_pc);
             /*
@@ -313,6 +334,38 @@ impl task_pool {
                 *e = Some(Box::new(Vec::new()));
             }
             self.next_task[cpuid] = Some(0);
+        }
+    }
+
+    pub fn save_from_ktrapframe(&mut self, cpuid: usize) -> Result<(), KError> {
+        if let Some(cur_taskidx) = self.next_task[cpuid] {
+            match self.POOL[cpuid] {
+                Some(ref mut taskvec) => {
+                    taskvec[cur_taskidx].save();
+                    return Ok(());
+                }
+                None => {
+                    return Err(new_kerror!(KErrorType::EINVAL));
+                }
+            }
+        } else {
+            return Err(new_kerror!(KErrorType::EINVAL));
+        }
+    }
+
+    pub fn set_currentPC(&mut self, cpuid: usize, newpc: usize) -> Result<(), KError> {
+        if let Some(cur_taskidx) = self.next_task[cpuid] {
+            match self.POOL[cpuid] {
+                Some(ref mut taskvec) => {
+                    taskvec[cur_taskidx].set_pc(newpc);
+                    return Ok(());
+                }
+                None => {
+                    return Err(new_kerror!(KErrorType::EINVAL));
+                }
+            }
+        } else {
+            return Err(new_kerror!(KErrorType::EINVAL));
         }
     }
 
