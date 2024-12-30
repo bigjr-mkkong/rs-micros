@@ -341,13 +341,14 @@ impl task_pool {
     }
 
     fn generate_next(&mut self, cpuid: usize) -> Result<(), KError> {
-        let task_qlen = self.POOL[cpuid].as_ref().
-            expect("Failed to take reference of task queue");
+        let task_qlen = self.POOL[cpuid]
+            .as_ref()
+            .expect("Failed to take reference of task queue");
         match self.next_task[cpuid] {
             Some(ref mut next_ent) => {
                 let tmp = *next_ent;
                 *next_ent = (tmp + 1) % task_qlen.len();
-            },
+            }
             None => {
                 return Err(new_kerror!(KErrorType::EFAULT));
             }
