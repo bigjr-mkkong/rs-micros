@@ -313,12 +313,6 @@ impl task_struct {
     }
 }
 
-/*
- * TODO:
- * Implement proper scheduler function to fill up next_task based on current state of taskpool.
- * Makesure replace all current_task with next_task after scheduler function finished and also
- * resume all updated current_task in sched()
- */
 pub struct task_pool {
     POOL: [Option<Box<Vec<task_struct>>>; MAX_HARTS],
     onlline_cpu_cnt: usize,
@@ -346,8 +340,24 @@ impl task_pool {
         }
     }
 
+    fn generate_next(&mut self, cpuid: usize) -> Result<(), KError> {
+        let task_qlen = self.POOL[cpuid].as_ref().
+            expect("Failed to take reference of task queue");
+        match self.next_task[cpuid] {
+            Some(ref mut next_ent) => {
+                let tmp = *next_ent;
+                *next_ent = (tmp + 1) % task_qlen.len();
+            },
+            None => {
+                return Err(new_kerror!(KErrorType::EFAULT));
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn save_from_ktrapframe(&mut self, cpuid: usize) -> Result<(), KError> {
-        if let Some(cur_taskidx) = self.next_task[cpuid] {
+        if let Some(cur_taskidx) = self.current_task[cpuid] {
             match self.POOL[cpuid] {
                 Some(ref mut taskvec) => {
                     taskvec[cur_taskidx].save();
@@ -363,7 +373,7 @@ impl task_pool {
     }
 
     pub fn set_currentPC(&mut self, cpuid: usize, newpc: usize) -> Result<(), KError> {
-        if let Some(cur_taskidx) = self.next_task[cpuid] {
+        if let Some(cur_taskidx) = self.current_task[cpuid] {
             match self.POOL[cpuid] {
                 Some(ref mut taskvec) => {
                     taskvec[cur_taskidx].set_pc(newpc);
@@ -389,12 +399,13 @@ impl task_pool {
     }
 
     pub fn sched(&mut self, cpuid: usize) -> Result<(), KError> {
-        if let Some(cur_taskidx) = self.next_task[cpuid] {
+        self.current_task = self.next_task;
+
+        self.generate_next(cpuid)?;
+
+        if let Some(cur_taskidx) = self.current_task[cpuid] {
             match self.POOL[cpuid] {
                 Some(ref mut taskvec) => {
-                    //Round Robin
-                    self.next_task[cpuid] = Some((cur_taskidx + 1) % taskvec.len());
-
                     if let Mode::Machine = get_cpu_mode(cpuid) {
                         taskvec[cur_taskidx].resume_from_M();
                         Ok(())
