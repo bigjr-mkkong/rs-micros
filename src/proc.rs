@@ -313,9 +313,16 @@ impl task_struct {
     }
 }
 
+/*
+ * TODO:
+ * Implement proper scheduler function to fill up next_task based on current state of taskpool.
+ * Makesure replace all current_task with next_task after scheduler function finished and also
+ * resume all updated current_task in sched()
+ */
 pub struct task_pool {
     POOL: [Option<Box<Vec<task_struct>>>; MAX_HARTS],
     onlline_cpu_cnt: usize,
+    current_task: [Option<usize>; MAX_HARTS],
     next_task: [Option<usize>; MAX_HARTS],
 }
 
@@ -324,6 +331,7 @@ impl task_pool {
         Self {
             POOL: [None, None, None, None],
             onlline_cpu_cnt: MAX_HARTS,
+            current_task: [None, None, None, None],
             next_task: [None, None, None, None],
         }
     }
@@ -334,6 +342,7 @@ impl task_pool {
                 *e = Some(Box::new(Vec::new()));
             }
             self.next_task[cpuid] = Some(0);
+            self.current_task[cpuid] = Some(0);
         }
     }
 
