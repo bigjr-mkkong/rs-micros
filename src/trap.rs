@@ -157,7 +157,6 @@ extern "C" fn m_trap(
                         S2Mop::TEST => {
                             TASK_POOL.save_from_ktrapframe(hart);
                             TASK_POOL.set_currentPC(hart, pc_ret + 4);
-                            println!("M-ECALL executing");
                             TASK_POOL.sched(hart);
                         }
                     }

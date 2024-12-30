@@ -44,7 +44,7 @@ use clint::clint_controller;
 use cpu::{get_cpu_mode, which_cpu, SATP_mode, TrapFrame};
 use ecall::{ecall_args, S2Mop};
 use error::{KError, KErrorType};
-use ktask::KHello_cpu0;
+use ktask::{KHello_cpu0, second_task};
 use nobsp_kfunc::kinit as nobsp_kinit;
 use nobsp_kfunc::kmain as nobsp_kmain;
 use plic::{extint_name, extint_src, plic_controller, plic_ctx};
@@ -415,7 +415,7 @@ fn kinit() -> Result<usize, KError> {
 
         mie::set_msoft();
 
-        mie::set_mtimer();
+        // mie::set_mtimer();
 
         mie::set_mext();
         mie::set_sext();
@@ -470,11 +470,14 @@ fn kmain(current_cpu: usize) -> Result<(), KError> {
         TASK_POOL.init(cpu::MAX_HARTS);
 
         let mut pcb_khello: task_struct = task_struct::new();
+        let mut pcb_second: task_struct = task_struct::new();
         let sched_cpu = which_cpu();
 
         pcb_khello.init(KHello_cpu0 as usize);
+        pcb_second.init(second_task as usize);
 
         TASK_POOL.append_task(&pcb_khello, sched_cpu)?;
+        TASK_POOL.append_task(&pcb_second, sched_cpu)?;
         TASK_POOL.sched(sched_cpu)?;
     }
 
