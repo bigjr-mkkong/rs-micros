@@ -66,7 +66,7 @@ impl page_allocator for naive_allocator {
         zone_size: usize,
     ) -> Result<(usize, usize), KError> {
         //Pretty wild, but lets keep this since this is a **NAIVE** allocator
-        println!("naive_Allocator Initializing");
+        Mprintln!("naive_Allocator Initializing");
         if zone_size < 3 * PAGE_SIZE {
             return Err(new_kerror!(KErrorType::ENOMEM));
         }
@@ -120,7 +120,7 @@ impl page_allocator for naive_allocator {
     }
 
     fn alloc_pages(&mut self, pg_cnt: usize) -> Result<*mut u8, KError> {
-        // println!("Start allocate {} page(s)", pg_cnt);
+        // Mprintln!("Start allocate {} page(s)", pg_cnt);
         let mut alloc_addr;
         for i in 0..self.tot_page {
             match self.map_first_fit_avail(i, pg_cnt) {
@@ -143,7 +143,7 @@ impl page_allocator for naive_allocator {
     }
 
     fn free_pages(&mut self, addr: *mut u8) -> Result<(), KError> {
-        println!("Start reclaiming...");
+        Mprintln!("Start reclaiming...");
         let mut rec_arr = unsafe {
             core::slice::from_raw_parts_mut(self.rec_begin as *mut PageRec, self.rec_size)
         };
@@ -174,22 +174,22 @@ impl naive_allocator {
         }
     }
     fn print_info(&self) {
-        println!("------------Allocator Info------------");
-        println!("Total Pages: {}", self.tot_page);
-        println!(
+        Mprintln!("------------Allocator Info------------");
+        Mprintln!("Total Pages: {}", self.tot_page);
+        Mprintln!(
             "Mapping Begin: {:#x} -- Size: {:#x}",
             self.map_begin as usize, self.map_size
         );
-        println!(
+        Mprintln!(
             "Record Begin: {:#x} -- Size: {:#x}",
             self.rec_begin as usize, self.rec_size
         );
-        println!(
+        Mprintln!(
             "Memory Begin: {:#x} -- Size: {:#x}",
             self.mem_begin as usize,
             self.tot_page * 4096
         );
-        println!("------------Allocator Info End------------");
+        Mprintln!("------------Allocator Info End------------");
     }
 
     fn map_first_fit_avail(&self, map_off: usize, thres_pg: usize) -> Result<bool, KError> {
@@ -304,7 +304,7 @@ impl page_allocator for empty_allocator {
         zone_end: usize,
         zone_size: usize,
     ) -> Result<(usize, usize), KError> {
-        println!("Placeholder Allocator Initializing");
+        Mprintln!("Placeholder Allocator Initializing");
         Ok((0 as usize, 0 as usize))
     }
     fn alloc_pages(&mut self, pg_cnt: usize) -> Result<*mut u8, KError> {

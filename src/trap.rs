@@ -31,17 +31,17 @@ extern "C" fn s_trap(
     if is_async {
         match cause_num {
             3 => {
-                println!("Supervisor: SW Interrupt at CPU#{}", hart);
+                Mprintln!("Supervisor: SW Interrupt at CPU#{}", hart);
             }
             9 => {
-                println!("Supervisor: Ext Interrupt at CPU#{}", hart);
+                Mprintln!("Supervisor: Ext Interrupt at CPU#{}", hart);
             }
             _ => {
                 panic!("S-mode: Unhandled async trap on CPU#{}", hart);
             }
         }
     } else {
-        println!("This exception should not been handled at S-mode");
+        Mprintln!("This exception should not been handled at S-mode");
         panic!();
     }
 
@@ -72,10 +72,10 @@ extern "C" fn m_trap(
     if is_async {
         match cause_num {
             3 => {
-                println!("Machine SW Interrupt at CPU#{}", hart);
+                Mprintln!("Machine SW Interrupt at CPU#{}", hart);
             }
             7 => {
-                println!("Machine Timer Interrupt at CPU#{}", hart);
+                Mprintln!("Machine Timer Interrupt at CPU#{}", hart);
                 unsafe {
                     CLINT.set_mtimecmp(hart, CLINT.read_mtime() + 0x500_000);
                 }
@@ -88,66 +88,66 @@ extern "C" fn m_trap(
                         10 => {
                             let ch_get = M_UART.lock().get();
                             if let Some(ch) = ch_get {
-                                println!("Uart extint at CPU#{}: {}", hart, ch as char);
+                                Mprintln!("Uart extint at CPU#{}: {}", hart, ch as char);
                             } else {
-                                println!("Uart extint at CPU#{}: Failed", hart);
+                                Mprintln!("Uart extint at CPU#{}: Failed", hart);
                             }
                         }
                         0 => {
                             //do nothing when 0
                         }
                         _ => {
-                            println!("Unsupported extint: #{} on CPU#{}", extint_id, hart);
+                            Mprintln!("Unsupported extint: #{} on CPU#{}", extint_id, hart);
                         }
                     }
                     PLIC.complete(&current_ctx, extint_id);
                 }
             }
             _ => {
-                println!("Unhandled async trap on CPU#{}", hart);
+                Mprintln!("Unhandled async trap on CPU#{}", hart);
                 cdump_flag = true;
             }
         }
     } else {
         match cause_num {
             0 => {
-                println!("Instruction Address Misaligned at CPU#{}\n", hart);
+                Mprintln!("Instruction Address Misaligned at CPU#{}\n", hart);
                 cdump_flag = true;
             }
             1 => {
-                println!("Instruction Access Fault at CPU#{}\n", hart);
+                Mprintln!("Instruction Access Fault at CPU#{}\n", hart);
                 cdump_flag = true;
             }
             2 => {
-                println!("Illegal instruction at CPU#{}\n", hart);
+                Mprintln!("Illegal instruction at CPU#{}\n", hart);
                 cdump_flag = true;
             }
             3 => {
-                // println!("Breakpoint Trap at CPU#{}\n", hart);
+                // Mprintln!("Breakpoint Trap at CPU#{}\n", hart);
                 pc_ret += 4;
             }
             4 => {
-                println!("Load Address Misaligned at CPU#{}\n", hart);
+                Mprintln!("Load Address Misaligned at CPU#{}\n", hart);
                 cdump_flag = true;
             }
             5 => {
-                println!("Load Access Fault at CPU#{}\n", hart);
+                Mprintln!("Load Access Fault at CPU#{}\n", hart);
                 cdump_flag = true;
             }
             6 => {
-                println!("Store/AMO Address Misaligned at CPU#{}\n", hart);
+                Mprintln!("Store/AMO Address Misaligned at CPU#{}\n", hart);
                 cdump_flag = true;
             }
             7 => {
-                println!("Store/AMO Access Fault at CPU#{}\n", hart);
+                Mprintln!("Store/AMO Access Fault at CPU#{}\n", hart);
                 cdump_flag = true;
             }
             8 => {
-                println!("E-call from User mode at CPU#{}", hart);
+                Mprintln!("E-call from User mode at CPU#{}", hart);
                 pc_ret += 4;
             }
             9 => {
-                println!("E-call from Supervisor mode at CPU#{}", hart);
+                // Mprintln!("E-call from Supervisor mode at CPU#{}", hart);
                 unsafe {
                     let opcode = SECALL_FRAME[hart].get_opcode();
                     match opcode {
@@ -164,28 +164,28 @@ extern "C" fn m_trap(
                 pc_ret += 4;
             }
             11 => {
-                println!("E-call from Machine mode at CPU#{}\n", hart);
+                Mprintln!("E-call from Machine mode at CPU#{}\n", hart);
             }
             12 => {
-                println!("Instruction page fault at CPU#{}", hart);
+                Mprintln!("Instruction page fault at CPU#{}", hart);
                 cdump_flag = true;
             }
             13 => {
-                println!("Load page fault at CPU#{}", hart);
+                Mprintln!("Load page fault at CPU#{}", hart);
                 cdump_flag = true;
             }
             15 => {
-                println!("Store page fault at CPU#{}", hart);
+                Mprintln!("Store page fault at CPU#{}", hart);
                 pc_ret += 4;
             }
             _ => {
-                println!("Unhandled sync trap at CPU#{}\n", hart);
+                Mprintln!("Unhandled sync trap at CPU#{}\n", hart);
                 cdump_flag = true;
             }
         }
 
         if cdump_flag == true {
-            println!(
+            Mprintln!(
                 "
 >>>>>>Core Dump<<<<<<
 ---------------------

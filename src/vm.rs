@@ -184,7 +184,7 @@ pub fn ident_range_map(
 
     let range_pgcnt = (addr_end - addr_begin) / page::PAGE_SIZE;
 
-    println!(
+    Mprintln!(
         "Identical Map PADDR range: {:#x} -> {:#x}",
         addr_begin, addr_end
     );

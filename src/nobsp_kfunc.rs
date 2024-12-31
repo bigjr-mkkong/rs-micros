@@ -6,7 +6,7 @@ use spin::Mutex;
 
 use crate::cpu::{which_cpu, SATP_mode, TrapFrame};
 use crate::error::{KError, KErrorType};
-use crate::ktask::{second_task, KHello_nobsp};
+use crate::ktask::{KHello_task0, KHello_task1};
 use crate::lock::spin_mutex;
 use crate::lock::{M_lock, S_lock};
 use crate::page;
@@ -22,7 +22,7 @@ use crate::{cpu, kmem, vm, KERNEL_TRAP_FRAME, M_UART, S_UART};
 pub fn kinit() -> Result<usize, KError> {
     let current_cpu = which_cpu();
 
-    println!("CPU#{} is running its nobsp_kinit()", current_cpu);
+    Mprintln!("CPU#{} is running its nobsp_kinit()", current_cpu);
 
     let pageroot_ptr = kmem::get_page_table();
     let mut pageroot = unsafe { pageroot_ptr.as_mut().unwrap() };
@@ -47,7 +47,7 @@ pub fn kinit() -> Result<usize, KError> {
 
         mie::set_msoft();
 
-        mie::set_mtimer();
+        // mie::set_mtimer();
 
         mie::set_mext();
 
@@ -65,18 +65,18 @@ pub fn kinit() -> Result<usize, KError> {
 
 pub fn kmain() -> Result<(), KError> {
     let current_cpu = which_cpu();
-    println!("CPU#{} Switched to S mode", current_cpu);
+    Sprintln!("CPU#{} Switched to S mode", current_cpu);
 
     unsafe {
         asm!("ebreak");
 
-        println!("CPU{} Back from trap\n", current_cpu);
+        Sprintln!("CPU{} Back from trap\n", current_cpu);
         CLINT.set_mtimecmp(current_cpu, CLINT.read_mtime() + 0x500_000);
 
         let mut khello_task: task_struct = task_struct::new();
         let mut second_task_pcb: task_struct = task_struct::new();
-        khello_task.init(KHello_nobsp as usize);
-        second_task_pcb.init(second_task as usize);
+        khello_task.init(KHello_task0 as usize);
+        second_task_pcb.init(KHello_task1 as usize);
 
         TASK_POOL.append_task(&khello_task, which_cpu());
         TASK_POOL.append_task(&second_task_pcb, which_cpu());
@@ -84,7 +84,7 @@ pub fn kmain() -> Result<(), KError> {
     }
 
     loop {
-        println!("CPU#{} kmain keep running...", current_cpu);
+        Sprintln!("CPU#{} kmain keep running...", current_cpu);
         let _ = cpu::busy_delay(1);
         unsafe {
             asm!("nop");

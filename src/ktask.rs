@@ -7,31 +7,19 @@ use crate::ecall::{trapping, S2Mop};
 use crate::{M_UART, S_UART};
 
 #[no_mangle]
-pub extern "C" fn KHello_cpu0() {
+pub extern "C" fn KHello_task0() {
     loop {
         // busy_delay(1);
-        println!("Hello from KHello_cpu0()");
+        Sprintln!("Hello from KHello_task0() on CPU#{}", which_cpu());
         trapping(S2Mop::TEST, &[0, 0, 0, 0, 0]);
     }
 }
 
 #[no_mangle]
-pub extern "C" fn second_task() {
+pub extern "C" fn KHello_task1() {
     loop {
         // busy_delay(1);
-        println!("Hello from second_task at CPU#{}", which_cpu());
+        Sprintln!("Hello from KHello_task1() on CPU#{}", which_cpu());
         trapping(S2Mop::TEST, &[0, 0, 0, 0, 0]);
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn KHello_nobsp() {
-    loop {
-        // busy_delay(1);
-        println!("Hello from KHello_nobsp() at CPU{}", which_cpu());
-        trapping(S2Mop::TEST, &[0, 0, 0, 0, 0]);
-        unsafe {
-            asm!("nop");
-        }
     }
 }

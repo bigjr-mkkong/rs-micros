@@ -139,7 +139,7 @@ impl mem_zone {
     }
 
     pub fn print_all(&self) {
-        println!(
+        Mprintln!(
             "[ZONE INFO] Begin: {:#x} -> End: {:#x}  Size: {:#x}  Type: {:#?}",
             self.begin_addr as usize,
             self.end_addr as usize,

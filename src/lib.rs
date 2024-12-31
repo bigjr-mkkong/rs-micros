@@ -44,7 +44,7 @@ use clint::clint_controller;
 use cpu::{get_cpu_mode, which_cpu, SATP_mode, TrapFrame};
 use ecall::{ecall_args, S2Mop};
 use error::{KError, KErrorType};
-use ktask::{second_task, KHello_cpu0};
+use ktask::{KHello_task0, KHello_task1};
 use nobsp_kfunc::kinit as nobsp_kinit;
 use nobsp_kfunc::kmain as nobsp_kmain;
 use plic::{extint_name, extint_src, plic_controller, plic_ctx};
@@ -52,47 +52,17 @@ use proc::{task_pool, task_struct};
 use vm::{ident_range_map, virt2phys};
 use zone::{kfree_page, kmalloc_page, zone_type};
 
-#[macro_export]
-macro_rules! print
-{
-    ($($args:tt)+) => ({
-        use core::fmt::Write;
-        use crate::cpu;
-        if let cpu::Mode::Machine = cpu::get_cpu_mode(cpu::which_cpu()) {
-            let _ = write!(M_UART.lock(), $($args)+);
-        }else{
-            let _ = write!(S_UART.lock(), $($args)+);
-        }
-    });
-}
-
-#[macro_export]
-macro_rules! println
-{
-    () => ({
-        print("\r\n")
-    });
-
-    ($fmt:expr) => ({
-        print!(concat!($fmt, "\r\n"))
-    });
-
-    ($fmt:expr, $($args:tt)+) => ({
-        print!(concat!($fmt, "\r\n"), $($args)+)
-    });
-
-}
 
 #[no_mangle]
 extern "C" fn eh_personality() {}
 
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
-    print!("System Aborting...");
+    Mprint!("System Aborting...");
     if let Some(p) = info.location() {
-        println!("line {}, file {}: {}", p.line(), p.file(), info.message());
+        Mprintln!("line {}, file {}: {}", p.line(), p.file(), info.message());
     } else {
-        println!("PanicInfo not available yet");
+        Mprintln!("PanicInfo not available yet");
     }
 
     abort();
@@ -117,8 +87,8 @@ extern "C" fn eh_func_kinit() -> usize {
     cpu::set_cpu_mode(cpu::Mode::Machine, cpuid);
     let init_return = kinit();
     if let Err(er_code) = init_return {
-        println!("{}", er_code);
-        println!("kinit() Failed on CPU#{}, System halting now...", cpuid);
+        Mprintln!("{}", er_code);
+        Mprintln!("kinit() Failed on CPU#{}, System halting now...", cpuid);
         loop {
             unsafe {
                 asm!("nop");
@@ -134,8 +104,8 @@ extern "C" fn eh_func_kmain(cpuid: usize) {
     cpu::set_cpu_mode(cpu::Mode::Supervisor, cpuid);
     let main_return = kmain(cpuid);
     if let Err(er_code) = main_return {
-        println!("{}", er_code);
-        println!("kmain() Failed, System halting now...");
+        Mprintln!("{}", er_code);
+        Mprintln!("kmain() Failed, System halting now...");
         loop {
             unsafe {
                 asm!("nop");
@@ -155,8 +125,8 @@ extern "C" fn eh_func_kinit_nobsp() -> usize {
     cpu::set_cpu_mode(cpu::Mode::Machine, cpuid);
     let init_return = nobsp_kinit();
     if let Err(er_code) = init_return {
-        println!("{}", er_code);
-        println!(
+        Mprintln!("{}", er_code);
+        Mprintln!(
             "nobsp_kinit() Failed at CPU#{}, System halting now...",
             cpuid
         );
@@ -175,8 +145,8 @@ pub extern "C" fn eh_func_nobsp_kmain() {
     let main_return = nobsp_kmain();
     cpu::set_cpu_mode(cpu::Mode::Supervisor, which_cpu());
     if let Err(er_code) = main_return {
-        println!("{}", er_code);
-        println!("kmain() Failed, System halting now...");
+        Mprintln!("{}", er_code);
+        Mprintln!("kmain() Failed, System halting now...");
         loop {
             unsafe {
                 asm!("nop");
@@ -223,10 +193,10 @@ pub static mut TASK_POOL: task_pool = task_pool::new();
 fn kinit() -> Result<usize, KError> {
     M_UART.lock().init();
     S_UART.lock().init();
-    println!("\nHello world");
+    Mprintln!("\nHello world");
 
     let current_cpu = cpu::mhartid_read();
-    println!("Initializer running on CPU#{}", current_cpu);
+    Mprintln!("Initializer running on CPU#{}", current_cpu);
 
     /*
      * Setting up new zone
@@ -353,7 +323,7 @@ fn kinit() -> Result<usize, KError> {
     let paddr = 0x1000_0000 as usize;
     let vaddr = virt2phys(&pageroot, paddr)?.unwrap_or(0);
 
-    println!("VM Walker test: Paddr: {:#x} -> Vaddr: {:#x}", paddr, vaddr);
+    Mprintln!("VM Walker test: Paddr: {:#x} -> Vaddr: {:#x}", paddr, vaddr);
 
     /*
      * Memory allocation for trap stack
@@ -377,7 +347,7 @@ fn kinit() -> Result<usize, KError> {
             let trapstack_paddr = KERNEL_TRAP_FRAME[cpu_cnt].trap_stack as usize - 1;
             let trapstack_vaddr = virt2phys(&pageroot, trapstack_paddr)?.unwrap_or(0);
 
-            println!(
+            Mprintln!(
                 "CPU#{} TrapStack: (vaddr){:#x} -> (paddr){:#x}",
                 cpu_cnt, trapstack_paddr, trapstack_vaddr
             );
@@ -385,7 +355,7 @@ fn kinit() -> Result<usize, KError> {
             let trapfram_paddr = ptr::addr_of_mut!(KERNEL_TRAP_FRAME[cpu_cnt]) as usize;
             let trapfram_vaddr = virt2phys(&pageroot, trapfram_paddr)?.unwrap_or(0);
 
-            println!(
+            Mprintln!(
                 "CPU#{} TrapFrame: (vaddr){:#x} -> (paddr){:#x}",
                 cpu_cnt, trapfram_paddr, trapfram_vaddr
             );
@@ -454,29 +424,29 @@ fn kinit() -> Result<usize, KError> {
 }
 
 fn kmain(current_cpu: usize) -> Result<(), KError> {
-    println!("CPU#{} Switched to S mode", current_cpu);
+    Sprintln!("CPU#{} Switched to S mode", current_cpu);
 
     unsafe {
         asm!("ebreak");
 
-        println!("CPU{} Back from trap\n", current_cpu);
+        Sprintln!("CPU{} Back from trap\n", current_cpu);
         CLINT.set_mtimecmp(current_cpu, CLINT.read_mtime() + 0x500_000);
     }
 
     let k = alloc::vec![1, 2, 3, 4, 5];
     for i in k.iter() {
-        println!("{}", i);
+        Sprintln!("{}", i);
     }
 
-    println!("---------->>Start Process<<----------");
+    Sprintln!("---------->>Start Process<<----------");
     unsafe {
 
         let mut pcb_khello: task_struct = task_struct::new();
         let mut pcb_second: task_struct = task_struct::new();
         let sched_cpu = which_cpu();
 
-        pcb_khello.init(KHello_cpu0 as usize);
-        pcb_second.init(second_task as usize);
+        pcb_khello.init(KHello_task0 as usize);
+        pcb_second.init(KHello_task1 as usize);
 
         TASK_POOL.append_task(&pcb_khello, sched_cpu)?;
         TASK_POOL.append_task(&pcb_second, sched_cpu)?;
@@ -484,7 +454,7 @@ fn kmain(current_cpu: usize) -> Result<(), KError> {
     }
 
     loop {
-        println!("CPU#{} kmain keep running...", current_cpu);
+        Sprintln!("CPU#{} kmain keep running...", current_cpu);
         let _ = cpu::busy_delay(1);
         unsafe {
             asm!("nop");
@@ -494,6 +464,8 @@ fn kmain(current_cpu: usize) -> Result<(), KError> {
     Ok(())
 }
 
+#[macro_use]
+pub mod print;
 pub mod allocator;
 pub mod clint;
 pub mod cpu;
