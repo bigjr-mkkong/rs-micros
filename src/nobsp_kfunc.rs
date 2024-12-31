@@ -6,7 +6,7 @@ use spin::Mutex;
 
 use crate::cpu::{which_cpu, SATP_mode, TrapFrame};
 use crate::error::{KError, KErrorType};
-use crate::ktask::KHello_nobsp;
+use crate::ktask::{second_task, KHello_nobsp};
 use crate::lock::spin_mutex;
 use crate::lock::{M_lock, S_lock};
 use crate::page;
@@ -74,9 +74,12 @@ pub fn kmain() -> Result<(), KError> {
         CLINT.set_mtimecmp(current_cpu, CLINT.read_mtime() + 0x500_000);
 
         let mut khello_task: task_struct = task_struct::new();
+        let mut second_task_pcb: task_struct = task_struct::new();
         khello_task.init(KHello_nobsp as usize);
+        second_task_pcb.init(second_task as usize);
 
         TASK_POOL.append_task(&khello_task, which_cpu());
+        TASK_POOL.append_task(&second_task_pcb, which_cpu());
         TASK_POOL.sched(which_cpu());
     }
 

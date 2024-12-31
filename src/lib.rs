@@ -439,6 +439,9 @@ fn kinit() -> Result<usize, KError> {
 
     cpu::sfence_vma();
 
+    unsafe{
+        TASK_POOL.init(cpu::MAX_HARTS);
+    }
     /*
      * Unlock other cores from early spin lock
      */
@@ -467,7 +470,6 @@ fn kmain(current_cpu: usize) -> Result<(), KError> {
 
     println!("---------->>Start Process<<----------");
     unsafe {
-        TASK_POOL.init(cpu::MAX_HARTS);
 
         let mut pcb_khello: task_struct = task_struct::new();
         let mut pcb_second: task_struct = task_struct::new();

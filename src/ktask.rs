@@ -9,7 +9,7 @@ use crate::{M_UART, S_UART};
 #[no_mangle]
 pub extern "C" fn KHello_cpu0() {
     loop {
-        let _ = busy_delay(1);
+        // busy_delay(1);
         println!("Hello from KHello_cpu0()");
         trapping(S2Mop::TEST, &[0, 0, 0, 0, 0]);
     }
@@ -18,8 +18,8 @@ pub extern "C" fn KHello_cpu0() {
 #[no_mangle]
 pub extern "C" fn second_task() {
     loop {
-        let _ = busy_delay(1);
-        println!("Hello from second_task");
+        // busy_delay(1);
+        println!("Hello from second_task at CPU#{}", which_cpu());
         trapping(S2Mop::TEST, &[0, 0, 0, 0, 0]);
     }
 }
@@ -27,8 +27,8 @@ pub extern "C" fn second_task() {
 #[no_mangle]
 pub extern "C" fn KHello_nobsp() {
     loop {
+        // busy_delay(1);
         println!("Hello from KHello_nobsp() at CPU{}", which_cpu());
-        let _ = busy_delay(1);
         trapping(S2Mop::TEST, &[0, 0, 0, 0, 0]);
         unsafe {
             asm!("nop");
