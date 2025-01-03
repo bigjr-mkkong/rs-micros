@@ -400,7 +400,7 @@ impl task_pool {
     }
 
     pub fn sched(&mut self, cpuid: usize) -> Result<(), KError> {
-        self.current_task = self.next_task;
+        self.current_task[cpuid] = self.next_task[cpuid];
 
         self.generate_next(cpuid)?;
 
