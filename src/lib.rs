@@ -52,7 +52,6 @@ use proc::{task_pool, task_struct};
 use vm::{ident_range_map, virt2phys};
 use zone::{kfree_page, kmalloc_page, zone_type};
 
-
 #[no_mangle]
 extern "C" fn eh_personality() {}
 
@@ -224,6 +223,15 @@ fn kinit() -> Result<usize, KError> {
     let kheap_pgcnt = kmem::get_kheap_pgcnt();
 
     unsafe {
+        ident_range_map(
+            pageroot,
+            pageroot_ptr as usize,
+            pageroot_ptr.add(page::PAGE_SIZE) as usize,
+            vm::EntryBits::ReadWrite.val(),
+        );
+    }
+
+    unsafe {
         cust_hmalloc
             .lock()
             .init(kheap_begin as usize, kheap_pgcnt * page::PAGE_SIZE);
@@ -349,7 +357,9 @@ fn kinit() -> Result<usize, KError> {
 
             Mprintln!(
                 "CPU#{} TrapStack: (vaddr){:#x} -> (paddr){:#x}",
-                cpu_cnt, trapstack_paddr, trapstack_vaddr
+                cpu_cnt,
+                trapstack_paddr,
+                trapstack_vaddr
             );
 
             let trapfram_paddr = ptr::addr_of_mut!(KERNEL_TRAP_FRAME[cpu_cnt]) as usize;
@@ -357,7 +367,9 @@ fn kinit() -> Result<usize, KError> {
 
             Mprintln!(
                 "CPU#{} TrapFrame: (vaddr){:#x} -> (paddr){:#x}",
-                cpu_cnt, trapfram_paddr, trapfram_vaddr
+                cpu_cnt,
+                trapfram_paddr,
+                trapfram_vaddr
             );
         }
     }
@@ -367,6 +379,7 @@ fn kinit() -> Result<usize, KError> {
      * root page table
      */
     cpu::satp_write(SATP_mode::Sv39, 0, pageroot_ptr as usize);
+    cpu::satp_refresh();
 
     kmem::set_ksatp(cpu::satp_read());
     /*
@@ -409,7 +422,7 @@ fn kinit() -> Result<usize, KError> {
 
     cpu::sfence_vma();
 
-    unsafe{
+    unsafe {
         TASK_POOL.init(cpu::MAX_HARTS);
     }
     /*
@@ -440,7 +453,6 @@ fn kmain(current_cpu: usize) -> Result<(), KError> {
 
     Sprintln!("---------->>Start Process<<----------");
     unsafe {
-
         let mut pcb_khello: task_struct = task_struct::new();
         let mut pcb_second: task_struct = task_struct::new();
         let sched_cpu = which_cpu();

@@ -1,4 +1,4 @@
-use crate::{S_UART, M_UART};
+use crate::{M_UART, S_UART};
 use core::fmt::Write;
 
 #[macro_export]

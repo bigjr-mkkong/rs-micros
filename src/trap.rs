@@ -176,7 +176,7 @@ extern "C" fn m_trap(
             }
             15 => {
                 Mprintln!("Store page fault at CPU#{}", hart);
-                pc_ret += 4;
+                cdump_flag = true;
             }
             _ => {
                 Mprintln!("Unhandled sync trap at CPU#{}\n", hart);
@@ -193,8 +193,13 @@ CPU {}
 Trapped instruction: 0x{:x}
 xtval: 0x{:x}
 xstatus: 0x{:x}
+satp: 0x{:x}
 ---------------------",
-                hart, xepc, xtval, xstatus
+                hart,
+                xepc,
+                xtval,
+                xstatus,
+                cpu::satp_read()
             );
             panic!();
         }

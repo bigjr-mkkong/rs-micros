@@ -84,15 +84,15 @@ impl task_struct {
                 self.pc = func;
                 self.pid = 0;
 
-                let kt_stack = kmalloc_page(zone_type::ZONE_NORMAL, 1)?.add(PAGE_SIZE * 1);
+                let kt_stack = kmalloc_page(zone_type::ZONE_NORMAL, 1)?.add((PAGE_SIZE * 1));
                 ident_range_map(
                     pageroot,
                     kt_stack.sub(1 * PAGE_SIZE) as usize,
-                    kt_stack.sub(1 * PAGE_SIZE) as usize,
+                    kt_stack as usize,
                     EntryBits::ReadWrite.val(),
                 );
 
-                let kt_expstack = kmalloc_page(zone_type::ZONE_NORMAL, 1)?.add(PAGE_SIZE * 1);
+                let kt_expstack = kmalloc_page(zone_type::ZONE_NORMAL, 1)?.add((PAGE_SIZE * 1));
                 ident_range_map(
                     pageroot,
                     kt_expstack.sub(1 * PAGE_SIZE) as usize,
@@ -100,9 +100,8 @@ impl task_struct {
                     EntryBits::ReadWrite.val(),
                 );
 
-                self.trap_frame.trap_stack = kt_expstack;
-                self.trap_frame.regs[2] = kt_stack as usize;
-                self.trap_frame.satp = get_ksatp() as usize;
+                self.trap_frame.trap_stack = kt_expstack.sub(1);
+                self.trap_frame.regs[2] = (kt_stack as usize) - 1;
             }
         } else {
             //initialize user task
@@ -301,7 +300,7 @@ impl task_struct {
             asm!("ld      x30, 30  * 8(s1)");
             asm!("ld      x31, 31  * 8(s1)");
             //load back satp value
-            asm!("ld      x9, 31 * 8(s1)");
+            asm!("ld      x9, 64 * 8(s1)");
             asm!("csrw      satp, s1");
 
             asm!("csrrw   s1, stval, s1");

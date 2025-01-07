@@ -178,11 +178,13 @@ impl naive_allocator {
         Mprintln!("Total Pages: {}", self.tot_page);
         Mprintln!(
             "Mapping Begin: {:#x} -- Size: {:#x}",
-            self.map_begin as usize, self.map_size
+            self.map_begin as usize,
+            self.map_size
         );
         Mprintln!(
             "Record Begin: {:#x} -- Size: {:#x}",
-            self.rec_begin as usize, self.rec_size
+            self.rec_begin as usize,
+            self.rec_size
         );
         Mprintln!(
             "Memory Begin: {:#x} -- Size: {:#x}",

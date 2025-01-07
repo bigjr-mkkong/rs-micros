@@ -186,7 +186,8 @@ pub fn ident_range_map(
 
     Mprintln!(
         "Identical Map PADDR range: {:#x} -> {:#x}",
-        addr_begin, addr_end
+        addr_begin,
+        addr_end
     );
 
     for _ in 0..range_pgcnt {

@@ -110,6 +110,12 @@ pub fn satp_write(satp_mode: SATP_mode, asid_val: usize, root_addr: usize) {
     }
 }
 
+pub fn satp_refresh() {
+    unsafe {
+        asm!("sfence.vma");
+    }
+}
+
 pub fn mepc_read() -> usize {
     let mepc_val: usize;
     unsafe {
@@ -237,15 +243,8 @@ pub fn sfence_vma() {
 pub extern "C" fn which_cpu() -> usize {
     unsafe {
         let TrapPt = sscratch_read() as *const TrapFrame;
-        TrapPt.read().cpuid
+        TrapPt.read_volatile().cpuid
     }
-    // let sp_val: usize;
-    // let stack_base = addr_of!(_stack_start) as usize;
-    // unsafe{
-    //     asm!("move {0}, sp", out(reg) sp_val);
-    // }
-
-    // ((stack_base - sp_val) / 0x10000) as usize
 }
 
 pub fn S_cli() -> usize {
