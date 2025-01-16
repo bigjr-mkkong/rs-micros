@@ -189,7 +189,7 @@ pub static glob_alloc: allocator::kheap_alloc = allocator::kheap_alloc::new();
 
 pub static mut EXTINT_SRCS: [extint_src; plic::MAX_INTCNT] = [extint_src::new(); plic::MAX_INTCNT];
 
-pub static mut TASK_POOL: task_pool = task_pool::new();
+pub static mut KTHREAD_POOL: task_pool = task_pool::new();
 
 fn kinit() -> Result<usize, KError> {
     M_UART.lock().init();
@@ -425,7 +425,7 @@ fn kinit() -> Result<usize, KError> {
     cpu::sfence_vma();
 
     unsafe {
-        TASK_POOL.init(cpu::MAX_HARTS);
+        KTHREAD_POOL.init(cpu::MAX_HARTS);
     }
     /*
      * Unlock other cores from early spin lock
@@ -462,9 +462,9 @@ fn kmain(current_cpu: usize) -> Result<(), KError> {
         pcb_khello.init(KHello_task0 as usize);
         pcb_second.init(KHello_task1 as usize);
 
-        TASK_POOL.append_task(&pcb_khello, sched_cpu)?;
-        TASK_POOL.append_task(&pcb_second, sched_cpu)?;
-        TASK_POOL.sched(sched_cpu)?;
+        KTHREAD_POOL.append_task(&pcb_khello, sched_cpu)?;
+        KTHREAD_POOL.append_task(&pcb_second, sched_cpu)?;
+        KTHREAD_POOL.sched(sched_cpu)?;
     }
 
     loop {

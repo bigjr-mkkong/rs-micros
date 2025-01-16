@@ -5,13 +5,14 @@ use crate::cpu::{
 };
 use crate::ecall::{trapping, S2Mop};
 use crate::{M_UART, S_UART};
+use alloc::vec::Vec;
 
 #[no_mangle]
 pub extern "C" fn KHello_task0() {
     loop {
         busy_delay(1);
         Sprintln!("Hello from KHello_task0() from CPU#{}", which_cpu());
-        trapping(S2Mop::TEST, &[0, 0, 0, 0, 0]);
+        trapping(S2Mop::YIELD, None);
     }
 }
 
@@ -20,6 +21,6 @@ pub extern "C" fn KHello_task1() {
     loop {
         busy_delay(1);
         Sprintln!("Hello from KHello_task1() from CPU#{}", which_cpu());
-        trapping(S2Mop::TEST, &[0, 0, 0, 0, 0]);
+        trapping(S2Mop::YIELD, None);
     }
 }

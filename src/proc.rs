@@ -47,11 +47,6 @@ pub struct task_struct {
     typ: task_typ,
 }
 
-// pub static mut TASK_POOL: [Option<Box<Vec<task_struct>>>; MAX_HARTS] =
-// {
-//     const none_taskcell: Option<Box<Vec<task_struct>>> = None;
-//     [none_taskcell; MAX_HARTS]
-// };
 impl task_struct {
     pub const fn new() -> Self {
         Self {

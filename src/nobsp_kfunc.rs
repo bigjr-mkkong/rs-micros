@@ -15,7 +15,7 @@ use crate::proc::task_struct;
 use crate::vm::{ident_range_map, virt2phys};
 use crate::zone::{kfree_page, kmalloc_page, zone_type};
 use crate::CLINT;
-use crate::TASK_POOL;
+use crate::KTHREAD_POOL;
 
 use crate::{cpu, kmem, vm, KERNEL_TRAP_FRAME, M_UART, S_UART};
 
@@ -78,9 +78,9 @@ pub fn kmain() -> Result<(), KError> {
         khello_task.init(KHello_task0 as usize);
         second_task_pcb.init(KHello_task1 as usize);
 
-        TASK_POOL.append_task(&khello_task, which_cpu());
-        TASK_POOL.append_task(&second_task_pcb, which_cpu());
-        TASK_POOL.sched(which_cpu());
+        KTHREAD_POOL.append_task(&khello_task, which_cpu());
+        KTHREAD_POOL.append_task(&second_task_pcb, which_cpu());
+        KTHREAD_POOL.sched(which_cpu());
     }
 
     loop {

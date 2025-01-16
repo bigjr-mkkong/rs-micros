@@ -3,7 +3,7 @@ use crate::plic;
 use crate::proc::{task_pool, task_struct};
 use crate::EXTINT_SRCS;
 use crate::SECALL_FRAME;
-use crate::TASK_POOL;
+use crate::KTHREAD_POOL;
 use crate::{ecall_args, S2Mop};
 use crate::{CLINT, PLIC};
 use crate::{M_UART, S_UART};
@@ -154,10 +154,13 @@ extern "C" fn m_trap(
                         S2Mop::UNDEF => {
                             panic!("Supervisor is tring to call undefined operation");
                         }
-                        S2Mop::TEST => {
-                            TASK_POOL.save_from_ktrapframe(hart);
-                            TASK_POOL.set_currentPC(hart, pc_ret + 4);
-                            TASK_POOL.sched(hart);
+                        S2Mop::YIELD => {
+                            KTHREAD_POOL.save_from_ktrapframe(hart);
+                            KTHREAD_POOL.set_currentPC(hart, pc_ret + 4);
+                            KTHREAD_POOL.sched(hart);
+                        }
+                        S2Mop::EXIT => {
+                            todo!("Haven't implement S2Mop::EXIT yet");
                         }
                     }
                 }
