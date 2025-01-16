@@ -38,7 +38,8 @@ To hang qemu before receive gdb client connection
   - [x] Kthread
   - [x] Ecall from kthread
   - [x] Task pool & round-robin scheduler & context switch
-  - [ ] More tests on multi-core schedule
+  - [x] More tests on multi-core schedule
+  - [Current working...] Basic kthread sync primitives`(fork(), join(), exit())`
   - [ ] kthread semaphore
   - [ ] User task
   - [ ] User syscall
