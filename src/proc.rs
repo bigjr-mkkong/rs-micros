@@ -76,6 +76,9 @@ impl task_struct {
         self.cpu = which_cpu();
         self.trap_frame.cpuid = self.cpu;
         if let task_typ::KERN_TASK = self.typ {
+            const KTASK_STACK_SZ: usize = 1 * PAGE_SIZE;
+            const KTASK_EXPSTACK_SZ: usize = 1 * PAGE_SIZE;
+
             self.trap_frame.satp = get_ksatp() as usize;
             let pageroot_ptr = get_page_table();
             let mut pageroot = unsafe { pageroot_ptr.as_mut().unwrap() };
@@ -84,19 +87,22 @@ impl task_struct {
                 self.pc = func;
                 self.pid = 0;
 
-                let kt_stack = kmalloc_page(zone_type::ZONE_NORMAL, 1)?.add((PAGE_SIZE * 1));
+                let kt_stack = kmalloc_page(zone_type::ZONE_NORMAL, KTASK_STACK_SZ / PAGE_SIZE)?
+                    .add(KTASK_STACK_SZ);
                 ident_range_map(
                     pageroot,
-                    kt_stack.sub(1 * PAGE_SIZE) as usize,
+                    kt_stack.sub(KTASK_STACK_SZ) as usize,
                     kt_stack as usize,
                     EntryBits::ReadWrite.val(),
                 );
 
-                let kt_expstack = kmalloc_page(zone_type::ZONE_NORMAL, 1)?.add((PAGE_SIZE * 1));
+                let kt_expstack =
+                    kmalloc_page(zone_type::ZONE_NORMAL, KTASK_EXPSTACK_SZ / PAGE_SIZE)?
+                        .add(KTASK_EXPSTACK_SZ);
                 ident_range_map(
                     pageroot,
-                    kt_expstack.sub(1 * PAGE_SIZE) as usize,
-                    kt_expstack.sub(1 * PAGE_SIZE) as usize,
+                    kt_expstack.sub(KTASK_EXPSTACK_SZ) as usize,
+                    kt_expstack as usize,
                     EntryBits::ReadWrite.val(),
                 );
 

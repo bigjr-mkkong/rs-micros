@@ -190,7 +190,7 @@ extern "C" fn m_trap(
 >>>>>>Core Dump<<<<<<
 ---------------------
 CPU {} 
-Trapped instruction: 0x{:x}
+xepc: 0x{:x}
 xtval: 0x{:x}
 xstatus: 0x{:x}
 satp: 0x{:x}

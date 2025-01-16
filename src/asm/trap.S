@@ -152,7 +152,7 @@ m_trap_vector:
 
 # switch back original s1(x9) value
     csrr    s2, mscratch
-    sd      s2, 8 * 8(s1)
+    sd      s2, 9 * 8(s1)
 
     csrr    a0, mepc
     csrr    a1, mtval

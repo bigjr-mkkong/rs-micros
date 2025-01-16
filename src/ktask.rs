@@ -6,30 +6,20 @@ use crate::cpu::{
 use crate::ecall::{trapping, S2Mop};
 use crate::{M_UART, S_UART};
 
-const fn get_magic() -> usize {
-    2233
-}
-
-/*
- * Output0:
- * xtval: 0x8d9
- * sepc: 0x800184ba
- */
 #[no_mangle]
 pub extern "C" fn KHello_task0() {
     loop {
-        // busy_delay(1);
-        let k = get_magic();
-        Sprintln!("Hello from KHello_task0() w/ magic {}", k);
-        // trapping(S2Mop::TEST, &[0, 0, 0, 0, 0]);
+        busy_delay(1);
+        Sprintln!("Hello from KHello_task0() from CPU#{}", which_cpu());
+        trapping(S2Mop::TEST, &[0, 0, 0, 0, 0]);
     }
 }
 
 #[no_mangle]
 pub extern "C" fn KHello_task1() {
     loop {
-        // busy_delay(1);
-        Sprintln!("Hello from KHello_task1()");
+        busy_delay(1);
+        Sprintln!("Hello from KHello_task1() from CPU#{}", which_cpu());
         trapping(S2Mop::TEST, &[0, 0, 0, 0, 0]);
     }
 }
