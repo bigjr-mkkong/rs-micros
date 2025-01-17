@@ -11,7 +11,7 @@ use crate::error::{KError, KErrorType};
 use crate::kmem::{get_ksatp, get_page_table};
 use crate::new_kerror;
 use crate::page::PAGE_SIZE;
-use crate::vm::{ident_range_map, range_unmap, mem_map, EntryBits, PageEntry, PageTable};
+use crate::vm::{ident_range_map, mem_map, range_unmap, EntryBits, PageEntry, PageTable};
 use crate::zone::{kfree_page, kmalloc_page, zone_type};
 use crate::KERNEL_TRAP_FRAME;
 use crate::{M_UART, S_UART};
@@ -50,24 +50,18 @@ pub struct task_struct {
     typ: task_typ,
 }
 
-impl Drop for task_struct{
-    fn drop(&mut self){
+impl Drop for task_struct {
+    fn drop(&mut self) {
         let pageroot_ptr = get_page_table();
         let mut pageroot = unsafe { pageroot_ptr.as_mut().unwrap() };
 
         let kt_stack_begin: *mut u8 = (self.stack_base - KTASK_STACK_SZ) as *mut u8;
         kfree_page(zone_type::ZONE_NORMAL, kt_stack_begin);
-        range_unmap(pageroot,
-                    kt_stack_begin as usize,
-                    self.stack_base);
+        range_unmap(pageroot, kt_stack_begin as usize, self.stack_base);
 
         let exp_stack_begin: *mut u8 = (self.exp_stack_base - KTASK_EXPSTACK_SZ) as *mut u8;
         kfree_page(zone_type::ZONE_NORMAL, exp_stack_begin);
-        range_unmap(pageroot,
-                    exp_stack_begin as usize,
-                    self.exp_stack_base);
-
-
+        range_unmap(pageroot, exp_stack_begin as usize, self.exp_stack_base);
     }
 }
 
@@ -433,12 +427,12 @@ impl task_pool {
         }
     }
 
-    fn get_scheduable_cnt(&self, cpuid: usize) -> usize{
+    fn get_scheduable_cnt(&self, cpuid: usize) -> usize {
         match self.POOL[cpuid] {
             Some(ref taskvec) => {
                 let mut live_cnt = 0;
                 for task in taskvec.iter() {
-                    match task.state{
+                    match task.state {
                         task_state::Ready => {
                             live_cnt += 1;
                         }
@@ -469,7 +463,7 @@ impl task_pool {
     }
 
     pub fn sched(&mut self, cpuid: usize) -> Result<(), KError> {
-        let live_cnt= self.get_scheduable_cnt(cpuid);
+        let live_cnt = self.get_scheduable_cnt(cpuid);
         self.current_task[cpuid] = self.next_task[cpuid];
 
         self.generate_next(cpuid)?;
@@ -477,7 +471,7 @@ impl task_pool {
         if let Some(cur_taskidx) = self.current_task[cpuid] {
             match self.POOL[cpuid] {
                 Some(ref mut taskvec) => {
-                    if live_cnt == 0{
+                    if live_cnt == 0 {
                         taskvec.clear();
                         return Ok(());
                     }

@@ -1,9 +1,9 @@
+use crate::cpu::flush_tlb;
 use crate::error::{KError, KErrorType};
 use crate::new_kerror;
 use crate::page;
 use crate::zone::{kfree_page, kmalloc_page, zone_type};
 use crate::{aligh_4k, aligl_4k};
-use crate::cpu::flush_tlb;
 use crate::{M_UART, S_UART};
 
 pub struct PageTable {
@@ -206,22 +206,13 @@ pub fn ident_range_map(
     Ok(())
 }
 
-pub fn range_unmap(
-    root: &mut PageTable,
-    begin: usize,
-    end: usize,
-) -> Result<(), KError> {
-
+pub fn range_unmap(root: &mut PageTable, begin: usize, end: usize) -> Result<(), KError> {
     let mut addr_begin = aligl_4k!(begin);
     let mut addr_end = aligh_4k!(end);
 
     let range_pgcnt = (addr_end - addr_begin) / page::PAGE_SIZE;
 
-    Mprintln!(
-        "Unmap addr range: {:#x} -> {:#x}",
-        addr_begin,
-        addr_end
-    );
+    Mprintln!("Unmap addr range: {:#x} -> {:#x}", addr_begin, addr_end);
 
     for _ in 0..range_pgcnt {
         mem_unmap(root, addr_begin, 0);

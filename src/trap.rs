@@ -1,9 +1,9 @@
 use crate::cpu::{busy_delay, set_cpu_mode, M_cli, M_sti, Mode, TrapFrame};
 use crate::plic;
-use crate::proc::{task_pool, task_struct, task_state};
+use crate::proc::{task_pool, task_state, task_struct};
 use crate::EXTINT_SRCS;
-use crate::SECALL_FRAME;
 use crate::KTHREAD_POOL;
+use crate::SECALL_FRAME;
 use crate::{ecall_args, S2Mop};
 use crate::{CLINT, PLIC};
 use crate::{M_UART, S_UART};

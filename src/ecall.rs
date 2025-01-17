@@ -65,24 +65,20 @@ impl ecall_args {
 pub fn trapping(opcode: S2Mop, args: Option<&[usize; 5]>) -> Result<usize, KError> {
     let cur_cpu = which_cpu();
     let mut ret_val: usize;
-    match args{
-        Some(arg_ref) => {
-            unsafe {
-                SECALL_FRAME[cur_cpu].set_opcode(opcode);
-                SECALL_FRAME[cur_cpu].set_args(arg_ref);
-                SECALL_FRAME[cur_cpu].set_ret(0);
-                ecall();
-                ret_val = SECALL_FRAME[cur_cpu].get_ret()
-            }
+    match args {
+        Some(arg_ref) => unsafe {
+            SECALL_FRAME[cur_cpu].set_opcode(opcode);
+            SECALL_FRAME[cur_cpu].set_args(arg_ref);
+            SECALL_FRAME[cur_cpu].set_ret(0);
+            ecall();
+            ret_val = SECALL_FRAME[cur_cpu].get_ret()
         },
-        None =>{
-            unsafe {
-                SECALL_FRAME[cur_cpu].set_opcode(opcode);
-                SECALL_FRAME[cur_cpu].set_ret(0);
-                ecall();
-                ret_val = SECALL_FRAME[cur_cpu].get_ret()
-            }
-        }
+        None => unsafe {
+            SECALL_FRAME[cur_cpu].set_opcode(opcode);
+            SECALL_FRAME[cur_cpu].set_ret(0);
+            ecall();
+            ret_val = SECALL_FRAME[cur_cpu].get_ret()
+        },
     }
 
     Ok(ret_val)
