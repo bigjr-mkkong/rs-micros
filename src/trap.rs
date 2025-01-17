@@ -161,11 +161,13 @@ extern "C" fn m_trap(
                         }
                         /*
                          * TODO:
-                         * After the last thread been zombied, something must happen
-                         * (Like back to join_all()?)
+                         * After the last thread been zombied, this sched() will quite and
+                         * carry on into undeterministed state. We might need to do someting
+                         * to let it shift to last join_all()
                          */
                         S2Mop::EXIT => {
                             KTHREAD_POOL.set_current_state(hart, task_state::Zombie);
+                            KTHREAD_POOL.sched(hart);
                         }
                     }
                 }

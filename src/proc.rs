@@ -433,6 +433,31 @@ impl task_pool {
         }
     }
 
+    fn get_scheduable_cnt(&self, cpuid: usize) -> usize{
+        match self.POOL[cpuid] {
+            Some(ref taskvec) => {
+                let mut live_cnt = 0;
+                for task in taskvec.iter() {
+                    match task.state{
+                        task_state::Ready => {
+                            live_cnt += 1;
+                        }
+                        task_state::Running => {
+                            live_cnt += 1;
+                        }
+                        _ => {
+                            live_cnt += 0;
+                        }
+                    }
+                }
+                return live_cnt;
+            }
+            None => {
+                return 0;
+            }
+        }
+    }
+
     pub fn append_task(&mut self, new_task: task_struct, cpuid: usize) -> Result<(), KError> {
         if let Some(boxvec) = &mut self.POOL[cpuid] {
             boxvec.push(new_task);
@@ -444,6 +469,7 @@ impl task_pool {
     }
 
     pub fn sched(&mut self, cpuid: usize) -> Result<(), KError> {
+        let live_cnt= self.get_scheduable_cnt(cpuid);
         self.current_task[cpuid] = self.next_task[cpuid];
 
         self.generate_next(cpuid)?;
@@ -451,6 +477,11 @@ impl task_pool {
         if let Some(cur_taskidx) = self.current_task[cpuid] {
             match self.POOL[cpuid] {
                 Some(ref mut taskvec) => {
+                    if live_cnt == 0{
+                        taskvec.clear();
+                        return Ok(());
+                    }
+
                     if let Mode::Machine = get_cpu_mode(cpuid) {
                         taskvec[cur_taskidx].resume_from_M();
                         Ok(())
