@@ -3,6 +3,7 @@ use crate::new_kerror;
 use crate::page;
 use crate::zone::{kfree_page, kmalloc_page, zone_type};
 use crate::{aligh_4k, aligl_4k};
+use crate::cpu::flush_tlb;
 use crate::{M_UART, S_UART};
 
 pub struct PageTable {
@@ -126,21 +127,28 @@ pub fn mem_map(
     Ok(())
 }
 
-pub fn mem_unmap(root: &mut PageTable) -> Result<(), KError> {
-    for lv2 in 0..PageTable::len() {
-        let ref entry_lv2 = root.entries[lv2];
-        if entry_lv2.is_valid() && entry_lv2.is_branch() {
-            let memaddr_lv1 = (entry_lv2.get_entry() & !0x3ff) << 2;
-            let table_lv1 = unsafe { (memaddr_lv1 as *mut PageTable).as_mut().unwrap() };
-            for lv1 in 0..PageTable::len() {
-                let ref entry_lv1 = table_lv1.entries[lv1];
-                if entry_lv1.is_valid() && entry_lv1.is_branch() {
-                    let memaddr_lv0 = (entry_lv1.get_entry() & !0x3ff) << 2;
-                    kfree_page(zone_type::ZONE_NORMAL, memaddr_lv0 as *mut u8)?;
-                }
-            }
-            kfree_page(zone_type::ZONE_NORMAL, memaddr_lv1 as *mut u8)?;
+pub fn mem_unmap(root: &mut PageTable, vaddr: usize, level: usize) -> Result<(), KError> {
+    let vpn = [
+        (vaddr >> 12) & 0x1ff,
+        (vaddr >> 21) & 0x1ff,
+        (vaddr >> 30) & 0x1ff,
+    ];
+
+    let mut v = &mut root.entries[vpn[2]];
+
+    for i in (0..=2).rev() {
+        if v.is_invalid() {
+            break;
+        } else if v.is_leaf() {
+            let new_ent = v.get_entry();
+            v.set_entry(new_ent & !EntryBits::Valid.val());
+            flush_tlb();
+
+            return Ok(());
         }
+
+        let entry = ((v.get_entry() & !0x3ff) << 2) as *mut PageEntry;
+        v = unsafe { entry.add(vpn[i - 1]).as_mut().unwrap() };
     }
 
     Ok(())
@@ -192,6 +200,31 @@ pub fn ident_range_map(
 
     for _ in 0..range_pgcnt {
         mem_map(root, addr_begin, addr_begin, bits, 0);
+        addr_begin += page::PAGE_SIZE;
+    }
+
+    Ok(())
+}
+
+pub fn range_unmap(
+    root: &mut PageTable,
+    begin: usize,
+    end: usize,
+) -> Result<(), KError> {
+
+    let mut addr_begin = aligl_4k!(begin);
+    let mut addr_end = aligh_4k!(end);
+
+    let range_pgcnt = (addr_end - addr_begin) / page::PAGE_SIZE;
+
+    Mprintln!(
+        "Unmap addr range: {:#x} -> {:#x}",
+        addr_begin,
+        addr_end
+    );
+
+    for _ in 0..range_pgcnt {
+        mem_unmap(root, addr_begin, 0);
         addr_begin += page::PAGE_SIZE;
     }
 

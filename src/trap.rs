@@ -1,6 +1,6 @@
 use crate::cpu::{busy_delay, set_cpu_mode, M_cli, M_sti, Mode, TrapFrame};
 use crate::plic;
-use crate::proc::{task_pool, task_struct};
+use crate::proc::{task_pool, task_struct, task_state};
 use crate::EXTINT_SRCS;
 use crate::SECALL_FRAME;
 use crate::KTHREAD_POOL;
@@ -159,8 +159,13 @@ extern "C" fn m_trap(
                             KTHREAD_POOL.set_currentPC(hart, pc_ret + 4);
                             KTHREAD_POOL.sched(hart);
                         }
+                        /*
+                         * TODO:
+                         * After the last thread been zombied, something must happen
+                         * (Like back to join_all()?)
+                         */
                         S2Mop::EXIT => {
-                            todo!("Haven't implement S2Mop::EXIT yet");
+                            KTHREAD_POOL.set_current_state(hart, task_state::Zombie);
                         }
                     }
                 }

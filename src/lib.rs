@@ -459,11 +459,8 @@ fn kmain(current_cpu: usize) -> Result<(), KError> {
         let mut pcb_second: task_struct = task_struct::new();
         let sched_cpu = which_cpu();
 
-        pcb_khello.init(KHello_task0 as usize);
-        pcb_second.init(KHello_task1 as usize);
-
-        KTHREAD_POOL.append_task(&pcb_khello, sched_cpu)?;
-        KTHREAD_POOL.append_task(&pcb_second, sched_cpu)?;
+        KTHREAD_POOL.spawn(KHello_task0 as usize, sched_cpu)?;
+        KTHREAD_POOL.spawn(KHello_task1 as usize, sched_cpu)?;
         KTHREAD_POOL.sched(sched_cpu)?;
     }
 
@@ -496,3 +493,4 @@ pub mod trap;
 pub mod uart;
 pub mod vm;
 pub mod zone;
+pub mod ktask_manager;

@@ -11,7 +11,7 @@ use crate::error::{KError, KErrorType};
 use crate::kmem::{get_ksatp, get_page_table};
 use crate::new_kerror;
 use crate::page::PAGE_SIZE;
-use crate::vm::{ident_range_map, mem_map, EntryBits, PageEntry, PageTable};
+use crate::vm::{ident_range_map, range_unmap, mem_map, EntryBits, PageEntry, PageTable};
 use crate::zone::{kfree_page, kmalloc_page, zone_type};
 use crate::KERNEL_TRAP_FRAME;
 use crate::{M_UART, S_UART};
@@ -19,7 +19,7 @@ use core::cell::UnsafeCell;
 use riscv::register::{mstatus, sstatus};
 
 #[derive(Clone, Copy)]
-enum task_state {
+pub enum task_state {
     Ready,
     Running,
     Block,
@@ -28,23 +28,47 @@ enum task_state {
 }
 
 #[derive(Clone, Copy)]
-enum task_typ {
+pub enum task_typ {
     KERN_TASK,
     USER_TASK,
 }
 
+const KTASK_STACK_SZ: usize = 1 * PAGE_SIZE;
+const KTASK_EXPSTACK_SZ: usize = 1 * PAGE_SIZE;
 /*
  * cpu need to keep same as current hartid
  * We can have per-cpu schedule queue, and each task in a single queue need to have same cpu value
  */
-#[derive(Clone, Copy)]
 pub struct task_struct {
     trap_frame: TrapFrame,
     state: task_state,
     pc: usize,
+    stack_base: usize,
+    exp_stack_base: usize,
     cpu: usize,
     pid: usize,
     typ: task_typ,
+}
+
+impl Drop for task_struct{
+    fn drop(&mut self){
+        let pageroot_ptr = get_page_table();
+        let mut pageroot = unsafe { pageroot_ptr.as_mut().unwrap() };
+
+        let kt_stack_begin: *mut u8 = (self.stack_base - KTASK_STACK_SZ) as *mut u8;
+        kfree_page(zone_type::ZONE_NORMAL, kt_stack_begin);
+        range_unmap(pageroot,
+                    kt_stack_begin as usize,
+                    self.stack_base);
+
+        let exp_stack_begin: *mut u8 = (self.exp_stack_base - KTASK_EXPSTACK_SZ) as *mut u8;
+        kfree_page(zone_type::ZONE_NORMAL, exp_stack_begin);
+        range_unmap(pageroot,
+                    exp_stack_begin as usize,
+                    self.exp_stack_base);
+
+
+    }
 }
 
 impl task_struct {
@@ -54,26 +78,21 @@ impl task_struct {
             state: task_state::Ready,
             pc: 0 as usize,
             cpu: 0 as usize,
+            stack_base: 0 as usize,
+            exp_stack_base: 0 as usize,
             pid: 0 as usize,
             typ: task_typ::KERN_TASK,
         }
     }
 
+    pub fn set_state(&mut self, new_state: task_state) {
+        self.state = new_state;
+    }
+
     pub fn init(&mut self, func: usize) -> Result<usize, KError> {
-        // let mut new_pcb = Self{
-        //     trap_frame: TrapFrame::new(),
-        //     state: task_state::Ready,
-        //     pc: 0 as usize,
-        //     cpu: which_cpu(),
-        //     pid: 0,
-        //     typ: task_typ::KERN_TASK
-        // };
         self.cpu = which_cpu();
         self.trap_frame.cpuid = self.cpu;
         if let task_typ::KERN_TASK = self.typ {
-            const KTASK_STACK_SZ: usize = 1 * PAGE_SIZE;
-            const KTASK_EXPSTACK_SZ: usize = 1 * PAGE_SIZE;
-
             self.trap_frame.satp = get_ksatp() as usize;
             let pageroot_ptr = get_page_table();
             let mut pageroot = unsafe { pageroot_ptr.as_mut().unwrap() };
@@ -101,8 +120,11 @@ impl task_struct {
                     EntryBits::ReadWrite.val(),
                 );
 
-                self.trap_frame.trap_stack = kt_expstack.sub(1);
-                self.trap_frame.regs[2] = (kt_stack as usize) - 1;
+                self.stack_base = (kt_stack as usize);
+                self.exp_stack_base = kt_expstack as usize;
+
+                self.trap_frame.trap_stack = (self.exp_stack_base - 1) as *mut u8;
+                self.trap_frame.regs[2] = self.stack_base - 1;
             }
         } else {
             //initialize user task
@@ -340,14 +362,20 @@ impl task_pool {
         }
     }
 
+    /*
+     * TODO:
+     * generate_next() should also check if the next task is schedulable
+     * This is not a problem for ktask, but since we are going to use same
+     * scheduler as future userspace program, we still need to implement this
+     */
     fn generate_next(&mut self, cpuid: usize) -> Result<(), KError> {
-        let task_qlen = self.POOL[cpuid]
+        let taskq = self.POOL[cpuid]
             .as_ref()
             .expect("Failed to take reference of task queue");
         match self.next_task[cpuid] {
             Some(ref mut next_ent) => {
                 let tmp = *next_ent;
-                *next_ent = (tmp + 1) % task_qlen.len();
+                *next_ent = (tmp + 1) % taskq.len();
             }
             None => {
                 return Err(new_kerror!(KErrorType::EFAULT));
@@ -362,6 +390,22 @@ impl task_pool {
             match self.POOL[cpuid] {
                 Some(ref mut taskvec) => {
                     taskvec[cur_taskidx].save();
+                    return Ok(());
+                }
+                None => {
+                    return Err(new_kerror!(KErrorType::EINVAL));
+                }
+            }
+        } else {
+            return Err(new_kerror!(KErrorType::EINVAL));
+        }
+    }
+
+    pub fn set_current_state(&mut self, cpuid: usize, new_state: task_state) -> Result<(), KError> {
+        if let Some(cur_taskidx) = self.current_task[cpuid] {
+            match self.POOL[cpuid] {
+                Some(ref mut taskvec) => {
+                    taskvec[cur_taskidx].set_state(new_state);
                     return Ok(());
                 }
                 None => {
@@ -389,9 +433,9 @@ impl task_pool {
         }
     }
 
-    pub fn append_task(&mut self, new_task: &task_struct, cpuid: usize) -> Result<(), KError> {
+    pub fn append_task(&mut self, new_task: task_struct, cpuid: usize) -> Result<(), KError> {
         if let Some(boxvec) = &mut self.POOL[cpuid] {
-            boxvec.push(*new_task);
+            boxvec.push(new_task);
         } else {
             return Err(new_kerror!(KErrorType::EINVAL));
         }

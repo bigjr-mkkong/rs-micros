@@ -116,6 +116,12 @@ pub fn satp_refresh() {
     }
 }
 
+pub fn flush_tlb() {
+    unsafe {
+        asm!("sfence.vma");
+    }
+}
+
 pub fn mepc_read() -> usize {
     let mepc_val: usize;
     unsafe {
