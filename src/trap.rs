@@ -162,14 +162,8 @@ extern "C" fn m_trap(
                             KTHREAD_POOL.set_currentPC(hart, pc_ret + 4);
                             KTHREAD_POOL.sched(hart);
                         }
-                        /*
-                         * TODO:
-                         * After the last thread been zombied, this sched() will quite and
-                         * carry on into undeterministed state. We might need to do someting
-                         * to let it shift to last join_all()
-                         */
                         S2Mop::EXIT => {
-                            KTHREAD_POOL.set_current_state(hart, task_state::Dead);
+                            KTHREAD_POOL.remove_cur_task(hart);
                             KTHREAD_POOL.sched(hart);
                             KTHREAD_POOL.fallback(hart);
                         }

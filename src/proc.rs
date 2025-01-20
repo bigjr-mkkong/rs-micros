@@ -491,6 +491,21 @@ impl task_pool {
         Ok(())
     }
 
+    pub fn remove_cur_task(&mut self, cpuid: usize) -> Result<(), KError> {
+        if let Some(cur_taskidx) = &mut self.current_task[cpuid] {
+            match &mut self.POOL[cpuid] {
+                Some(ref mut boxvec) => {
+                    boxvec.swap_remove(*cur_taskidx);
+                }
+                None => {
+                    return Err(new_kerror!(KErrorType::EFAULT));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn fallback(&mut self, cpuid: usize) -> Result<(), KError> {
         match self.fallback_task[cpuid] {
             Some(ref mut fallbacker) => {
