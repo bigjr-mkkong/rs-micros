@@ -104,10 +104,6 @@ extern "C" fn m_trap(
                     PLIC.complete(&current_ctx, extint_id);
 
                     KTHREAD_POOL.spawn(ktask_uart as usize, hart);
-
-                    KTHREAD_POOL.save_from_ktrapframe(hart);
-                    KTHREAD_POOL.set_currentPC(hart, pc_ret);
-                    KTHREAD_POOL.sched(hart);
                 }
             }
             _ => {
