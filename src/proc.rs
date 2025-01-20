@@ -17,6 +17,7 @@ use crate::KERNEL_TRAP_FRAME;
 use crate::{M_UART, S_UART};
 use core::cell::UnsafeCell;
 use riscv::register::{mstatus, sstatus};
+use crate::ktask::ktask_fallback;
 
 #[derive(Clone, Copy)]
 pub enum task_state {
@@ -79,6 +80,10 @@ impl task_struct {
         }
     }
 
+    pub fn get_state(&self) -> task_state{
+        self.state
+    }
+
     pub fn set_state(&mut self, new_state: task_state) {
         self.state = new_state;
     }
@@ -86,6 +91,7 @@ impl task_struct {
     pub fn init(&mut self, func: usize) -> Result<usize, KError> {
         self.cpu = which_cpu();
         self.trap_frame.cpuid = self.cpu;
+        self.state = task_state::Ready;
         if let task_typ::KERN_TASK = self.typ {
             self.trap_frame.satp = get_ksatp() as usize;
             let pageroot_ptr = get_page_table();
@@ -334,6 +340,7 @@ pub struct task_pool {
     onlline_cpu_cnt: usize,
     current_task: [Option<usize>; MAX_HARTS],
     next_task: [Option<usize>; MAX_HARTS],
+    fallback_task: [Option<Box<task_struct>>; MAX_HARTS]
 }
 
 impl task_pool {
@@ -343,6 +350,7 @@ impl task_pool {
             onlline_cpu_cnt: MAX_HARTS,
             current_task: [None, None, None, None],
             next_task: [None, None, None, None],
+            fallback_task: [None, None, None, None],
         }
     }
 
@@ -350,6 +358,12 @@ impl task_pool {
         for cpuid in 0..cpucnt {
             for (i, mut e) in self.POOL.iter_mut().enumerate() {
                 *e = Some(Box::new(Vec::new()));
+            }
+            for fallbacker in self.fallback_task.iter_mut() {
+                let mut fallb = task_struct::new();
+                fallb.init(ktask_fallback as usize);
+
+                *fallbacker = Some(Box::new(fallb));
             }
             self.next_task[cpuid] = Some(0);
             self.current_task[cpuid] = Some(0);
@@ -368,8 +382,23 @@ impl task_pool {
             .expect("Failed to take reference of task queue");
         match self.next_task[cpuid] {
             Some(ref mut next_ent) => {
-                let tmp = *next_ent;
-                *next_ent = (tmp + 1) % taskq.len();
+                loop{
+                    let tmp = *next_ent;
+                    *next_ent = (tmp + 1) % taskq.len();
+                    if let Some(ref taskvec) = self.POOL[cpuid] {
+                        match taskvec[*next_ent].get_state() {
+                            task_state::Ready => {
+                                break;
+                            }
+                            task_state::Running => {
+                                break;
+                            }
+                            _ => {}
+                        }
+                    } else {
+                        return Err(new_kerror!(KErrorType::EFAULT));
+                    }
+                }
             }
             None => {
                 return Err(new_kerror!(KErrorType::EFAULT));
@@ -432,7 +461,7 @@ impl task_pool {
             Some(ref taskvec) => {
                 let mut live_cnt = 0;
                 for task in taskvec.iter() {
-                    match task.state {
+                    match task.get_state() {
                         task_state::Ready => {
                             live_cnt += 1;
                         }
@@ -462,6 +491,23 @@ impl task_pool {
         Ok(())
     }
 
+    pub fn fallback(&mut self, cpuid: usize) -> Result<(), KError> {
+        match self.fallback_task[cpuid] {
+            Some(ref mut fallbacker) => {
+                if let Mode::Machine = get_cpu_mode(cpuid) {
+                    fallbacker.resume_from_M();
+                    Ok(())
+                } else {
+                    fallbacker.resume_from_S();
+                    Ok(())
+                }
+            }
+            None => {
+                return Err(new_kerror!(KErrorType::EINVAL));
+            }
+        }
+    }
+
     pub fn sched(&mut self, cpuid: usize) -> Result<(), KError> {
         let live_cnt = self.get_scheduable_cnt(cpuid);
         self.current_task[cpuid] = self.next_task[cpuid];
@@ -473,6 +519,10 @@ impl task_pool {
                 Some(ref mut taskvec) => {
                     if live_cnt == 0 {
                         taskvec.clear();
+                        //TODO:
+                        //Make it looks better with macro
+                        self.current_task = [Some(0), Some(0), Some(0), Some(0)];
+                        self.next_task = [Some(0), Some(0), Some(0), Some(0)];
                         return Ok(());
                     }
 

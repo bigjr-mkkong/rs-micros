@@ -11,9 +11,9 @@ impl task_pool {
         Ok(())
     }
 
-    pub fn join_all() -> Result<usize, KError> {
-        //join shall only unblock when all kthread has finished(Into zombie mode)
-        todo!();
+    pub fn join_all(&mut self, cpuid: usize) -> Result<usize, KError> {
+        self.sched(cpuid);
+        Ok(0)
     }
 }
 

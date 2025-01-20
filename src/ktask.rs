@@ -9,7 +9,7 @@ use alloc::vec::Vec;
 
 #[no_mangle]
 pub extern "C" fn KHello_task0() {
-    loop {
+    loop{
         busy_delay(1);
         Sprintln!("Hello from KHello_task0() from CPU#{}", which_cpu());
         trapping(S2Mop::YIELD, None);
@@ -18,9 +18,23 @@ pub extern "C" fn KHello_task0() {
 
 #[no_mangle]
 pub extern "C" fn KHello_task1() {
-    loop {
+    loop{
         busy_delay(1);
         Sprintln!("Hello from KHello_task1() from CPU#{}", which_cpu());
         trapping(S2Mop::YIELD, None);
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn ktask_uart() {
+    Sprintln!("CPU#{} trapped at uart, but I will not tell you wats goinon", which_cpu());
+    trapping(S2Mop::EXIT, None);
+}
+
+#[no_mangle]
+pub extern "C" fn ktask_fallback() {
+    Sprintln!("CPU#{} trapped at ktask fallbacker, nothing will happen(right now)", which_cpu());
+    loop {
+        busy_delay(1);
     }
 }

@@ -1,6 +1,7 @@
 use crate::cpu::{busy_delay, set_cpu_mode, M_cli, M_sti, Mode, TrapFrame};
 use crate::plic;
 use crate::proc::{task_pool, task_state, task_struct};
+use crate::ktask::{ktask_uart};
 use crate::EXTINT_SRCS;
 use crate::KTHREAD_POOL;
 use crate::SECALL_FRAME;
@@ -101,6 +102,12 @@ extern "C" fn m_trap(
                         }
                     }
                     PLIC.complete(&current_ctx, extint_id);
+
+                    KTHREAD_POOL.spawn(ktask_uart as usize, hart);
+
+                    KTHREAD_POOL.save_from_ktrapframe(hart);
+                    KTHREAD_POOL.set_currentPC(hart, pc_ret);
+                    KTHREAD_POOL.sched(hart);
                 }
             }
             _ => {
@@ -166,8 +173,9 @@ extern "C" fn m_trap(
                          * to let it shift to last join_all()
                          */
                         S2Mop::EXIT => {
-                            KTHREAD_POOL.set_current_state(hart, task_state::Zombie);
+                            KTHREAD_POOL.set_current_state(hart, task_state::Dead);
                             KTHREAD_POOL.sched(hart);
+                            KTHREAD_POOL.fallback(hart);
                         }
                     }
                 }
