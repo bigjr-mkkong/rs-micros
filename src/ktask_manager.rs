@@ -11,8 +11,9 @@ impl task_pool {
         Ok(())
     }
 
-    pub fn join_all(&mut self, cpuid: usize) -> Result<usize, KError> {
+    pub fn join_all_ktask(&mut self, cpuid: usize) -> Result<usize, KError> {
         self.sched(cpuid);
+        self.fallback(cpuid);
         Ok(0)
     }
 }

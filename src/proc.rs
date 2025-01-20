@@ -384,20 +384,28 @@ impl task_pool {
             Some(ref mut next_ent) => {
                 loop{
                     let tmp = *next_ent;
-                    *next_ent = (tmp + 1) % taskq.len();
-                    if let Some(ref taskvec) = self.POOL[cpuid] {
-                        match taskvec[*next_ent].get_state() {
-                            task_state::Ready => {
-                                break;
+                    let taskqlen = taskq.len();
+
+                    if taskqlen == 0 {
+                        *next_ent = 0;
+                        break;
+                    } else{
+                        *next_ent = (tmp + 1) % taskq.len();
+                        if let Some(ref taskvec) = self.POOL[cpuid] {
+                            match taskvec[*next_ent].get_state() {
+                                task_state::Ready => {
+                                    break;
+                                }
+                                task_state::Running => {
+                                    break;
+                                }
+                                _ => {}
                             }
-                            task_state::Running => {
-                                break;
-                            }
-                            _ => {}
+                        } else {
+                            return Err(new_kerror!(KErrorType::EFAULT));
                         }
-                    } else {
-                        return Err(new_kerror!(KErrorType::EFAULT));
                     }
+
                 }
             }
             None => {
@@ -525,9 +533,9 @@ impl task_pool {
 
     pub fn sched(&mut self, cpuid: usize) -> Result<(), KError> {
         let live_cnt = self.get_scheduable_cnt(cpuid);
+        self.generate_next(cpuid)?;
         self.current_task[cpuid] = self.next_task[cpuid];
 
-        self.generate_next(cpuid)?;
 
         if let Some(cur_taskidx) = self.current_task[cpuid] {
             match self.POOL[cpuid] {

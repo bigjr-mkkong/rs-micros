@@ -460,16 +460,12 @@ fn kmain(current_cpu: usize) -> Result<(), KError> {
         let sched_cpu = which_cpu();
 
         KTHREAD_POOL.spawn(KHello_task0 as usize, sched_cpu)?;
-        KTHREAD_POOL.spawn(KHello_task1 as usize, sched_cpu)?;
-        KTHREAD_POOL.sched(sched_cpu)?;
+        // KTHREAD_POOL.spawn(KHello_task1 as usize, sched_cpu)?;
+        KTHREAD_POOL.join_all_ktask(sched_cpu);
     }
 
-    loop {
-        Sprintln!("CPU#{} kmain keep running...", current_cpu);
-        let _ = cpu::busy_delay(1);
-        unsafe {
-            asm!("nop");
-        }
+    loop{
+        cpu::busy_delay(1);
     }
 
     Ok(())
