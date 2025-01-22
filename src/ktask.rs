@@ -19,7 +19,7 @@ pub extern "C" fn KHello_task0() {
 #[no_mangle]
 pub extern "C" fn KHello_task1() {
     loop{
-        busy_delay(1);
+        // busy_delay(1);
         Sprintln!("Hello from KHello_task1() from CPU#{}", which_cpu());
         trapping(S2Mop::YIELD, None);
     }

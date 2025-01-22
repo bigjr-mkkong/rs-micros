@@ -40,7 +40,7 @@ use riscv::register::{medeleg, mideleg, mie, mstatus, sie, sstatus};
 use spin::Mutex;
 
 use crate::lock::spin_mutex;
-use crate::lock::{M_lock, S_lock};
+use crate::lock::{M_lock, S_lock, Critical_Area};
 use alloc::vec::Vec;
 use clint::clint_controller;
 use cpu::{get_cpu_mode, which_cpu, SATP_mode, TrapFrame};
@@ -193,7 +193,6 @@ pub static mut KTHREAD_POOL: task_pool = task_pool::new();
 
 fn kinit() -> Result<usize, KError> {
     M_UART.lock().init();
-    S_UART.lock().init();
     Mprintln!("\nHello world");
 
     let current_cpu = cpu::mhartid_read();
@@ -439,6 +438,7 @@ fn kinit() -> Result<usize, KError> {
 }
 
 fn kmain(current_cpu: usize) -> Result<(), KError> {
+    S_UART.lock().init();
     Sprintln!("CPU#{} Switched to S mode", current_cpu);
 
     unsafe {

@@ -103,11 +103,11 @@ extern "C" fn m_trap(
                     }
                     PLIC.complete(&current_ctx, extint_id);
 
-                    KTHREAD_POOL.spawn(ktask_uart as usize, hart);
+                    // KTHREAD_POOL.spawn(ktask_uart as usize, hart);
 
-                    KTHREAD_POOL.save_from_ktrapframe(hart);
-                    KTHREAD_POOL.set_currentPC(hart, pc_ret);
-                    KTHREAD_POOL.join_all_ktask(hart);
+                    // KTHREAD_POOL.save_from_ktrapframe(hart);
+                    // KTHREAD_POOL.set_currentPC(hart, pc_ret);
+                    // KTHREAD_POOL.join_all_ktask(hart);
                 }
             }
             _ => {
@@ -155,28 +155,13 @@ extern "C" fn m_trap(
             }
             9 => {
                 // Mprintln!("E-call from Supervisor mode at CPU#{}", hart);
-                unsafe {
-                    let opcode = SECALL_FRAME[hart].get_opcode();
-                    match opcode {
-                        S2Mop::UNDEF => {
-                            panic!("Supervisor is tring to call undefined operation");
-                        }
-                        S2Mop::YIELD => {
-                            KTHREAD_POOL.save_from_ktrapframe(hart);
-                            KTHREAD_POOL.set_currentPC(hart, pc_ret + 4);
-                            KTHREAD_POOL.sched(hart);
-                        }
-                        S2Mop::EXIT => {
-                            KTHREAD_POOL.remove_cur_task(hart);
-                            KTHREAD_POOL.sched(hart);
-                            KTHREAD_POOL.fallback(hart);
-                        }
-                    }
-                }
+                ecall_handler(pc_ret, hart);
                 pc_ret += 4;
             }
             11 => {
                 Mprintln!("E-call from Machine mode at CPU#{}\n", hart);
+                ecall_handler(pc_ret, hart);
+                pc_ret += 4;
             }
             12 => {
                 Mprintln!("Instruction page fault at CPU#{}", hart);
@@ -220,4 +205,25 @@ satp: 0x{:x}
     set_cpu_mode(mpp, hart);
 
     pc_ret
+}
+
+fn ecall_handler(pc_ret: usize, hart: usize) {
+    unsafe {
+        let opcode = SECALL_FRAME[hart].get_opcode();
+        match opcode {
+            S2Mop::UNDEF => {
+                panic!("Supervisor is tring to call undefined operation");
+            }
+            S2Mop::YIELD => {
+                KTHREAD_POOL.save_from_ktrapframe(hart);
+                KTHREAD_POOL.set_currentPC(hart, pc_ret + 4);
+                KTHREAD_POOL.sched(hart);
+            }
+            S2Mop::EXIT => {
+                KTHREAD_POOL.remove_cur_task(hart);
+                KTHREAD_POOL.sched(hart);
+                KTHREAD_POOL.fallback(hart);
+            }
+        }
+    }
 }
