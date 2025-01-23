@@ -3,7 +3,6 @@
 .global s_trap_vector
 .global m_trap_vector
 s_trap_vector:
-# TODO:
 # sscratch keep the current-running task's trap frame, it lies in kmem space
 # and is safe to access through physical memory
     csrrw   s1, sscratch, s1

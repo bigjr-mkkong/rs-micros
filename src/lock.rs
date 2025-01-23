@@ -1,9 +1,9 @@
 use crate::cpu::{get_cpu_mode, which_cpu, M_cli, M_sti, Mode, S_cli, S_sti};
 use crate::ecall::{trapping, S2Mop};
+use crate::SECALL_FRAME;
 use crate::{M_UART, S_UART};
 use core::arch::asm;
 use core::ops::{Deref, DerefMut};
-use crate::SECALL_FRAME;
 use spin::{Mutex, RwLock};
 
 pub trait IntControl {

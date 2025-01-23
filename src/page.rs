@@ -143,7 +143,7 @@ impl page_allocator for naive_allocator {
     }
 
     fn free_pages(&mut self, addr: *mut u8) -> Result<(), KError> {
-        Mprintln!("Start reclaiming...");
+        // Mprintln!("Start reclaiming...");
         let mut rec_arr = unsafe {
             core::slice::from_raw_parts_mut(self.rec_begin as *mut PageRec, self.rec_size)
         };

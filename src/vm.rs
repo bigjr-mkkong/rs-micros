@@ -192,11 +192,11 @@ pub fn ident_range_map(
 
     let range_pgcnt = (addr_end - addr_begin) / page::PAGE_SIZE;
 
-    Mprintln!(
-        "Identical Map PADDR range: {:#x} -> {:#x}",
-        addr_begin,
-        addr_end
-    );
+    // Mprintln!(
+    //     "Identical Map PADDR range: {:#x} -> {:#x}",
+    //     addr_begin,
+    //     addr_end
+    // );
 
     for _ in 0..range_pgcnt {
         mem_map(root, addr_begin, addr_begin, bits, 0);
@@ -212,7 +212,7 @@ pub fn range_unmap(root: &mut PageTable, begin: usize, end: usize) -> Result<(),
 
     let range_pgcnt = (addr_end - addr_begin) / page::PAGE_SIZE;
 
-    Mprintln!("Unmap addr range: {:#x} -> {:#x}", addr_begin, addr_end);
+    // Mprintln!("Unmap addr range: {:#x} -> {:#x}", addr_begin, addr_end);
 
     for _ in 0..range_pgcnt {
         mem_unmap(root, addr_begin, 0);

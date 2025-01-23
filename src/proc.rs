@@ -9,15 +9,16 @@ use crate::ecall;
 use crate::ecall::S2Mop;
 use crate::error::{KError, KErrorType};
 use crate::kmem::{get_ksatp, get_page_table};
+use crate::ktask::{ktask_extint, ktask_fallback};
 use crate::new_kerror;
 use crate::page::PAGE_SIZE;
 use crate::vm::{ident_range_map, mem_map, range_unmap, EntryBits, PageEntry, PageTable};
 use crate::zone::{kfree_page, kmalloc_page, zone_type};
+use crate::IRQ_BUFFER;
 use crate::KERNEL_TRAP_FRAME;
 use crate::{M_UART, S_UART};
 use core::cell::UnsafeCell;
 use riscv::register::{mstatus, sstatus};
-use crate::ktask::ktask_fallback;
 
 #[derive(Clone, Copy)]
 pub enum task_state {
@@ -80,7 +81,7 @@ impl task_struct {
         }
     }
 
-    pub fn get_state(&self) -> task_state{
+    pub fn get_state(&self) -> task_state {
         self.state
     }
 
@@ -340,7 +341,7 @@ pub struct task_pool {
     onlline_cpu_cnt: usize,
     current_task: [Option<usize>; MAX_HARTS],
     next_task: [Option<usize>; MAX_HARTS],
-    fallback_task: [Option<Box<task_struct>>; MAX_HARTS]
+    fallback_task: [Option<Box<task_struct>>; MAX_HARTS],
 }
 
 impl task_pool {
@@ -370,44 +371,35 @@ impl task_pool {
         }
     }
 
-    /*
-     * TODO:
-     * generate_next() should also check if the next task is schedulable
-     * This is not a problem for ktask, but since we are going to use same
-     * scheduler as future userspace program, we still need to implement this
-     */
     fn generate_next(&mut self, cpuid: usize) -> Result<(), KError> {
         let taskq = self.POOL[cpuid]
             .as_ref()
             .expect("Failed to take reference of task queue");
         match self.next_task[cpuid] {
-            Some(ref mut next_ent) => {
-                loop{
-                    let tmp = *next_ent;
-                    let taskqlen = taskq.len();
+            Some(ref mut next_ent) => loop {
+                let tmp = *next_ent;
+                let taskqlen = taskq.len();
 
-                    if taskqlen == 0 {
-                        *next_ent = 0;
-                        break;
-                    } else{
-                        *next_ent = (tmp + 1) % taskq.len();
-                        if let Some(ref taskvec) = self.POOL[cpuid] {
-                            match taskvec[*next_ent].get_state() {
-                                task_state::Ready => {
-                                    break;
-                                }
-                                task_state::Running => {
-                                    break;
-                                }
-                                _ => {}
+                if taskqlen == 0 {
+                    *next_ent = 0;
+                    break;
+                } else {
+                    *next_ent = (tmp + 1) % taskq.len();
+                    if let Some(ref taskvec) = self.POOL[cpuid] {
+                        match taskvec[*next_ent].get_state() {
+                            task_state::Ready => {
+                                break;
                             }
-                        } else {
-                            return Err(new_kerror!(KErrorType::EFAULT));
+                            task_state::Running => {
+                                break;
+                            }
+                            _ => {}
                         }
+                    } else {
+                        return Err(new_kerror!(KErrorType::EFAULT));
                     }
-
                 }
-            }
+            },
             None => {
                 return Err(new_kerror!(KErrorType::EFAULT));
             }
@@ -531,11 +523,24 @@ impl task_pool {
         }
     }
 
+    /*
+     * TODO:
+     * Disable interrupt when next task is extint-handler
+     * Re-enable interrupt when last task is extint-handler
+     * We need to make sure extint-handler will not preempt when it is executing
+     */
     pub fn sched(&mut self, cpuid: usize) -> Result<(), KError> {
+        unsafe {
+            if let Ok(is_empty) = IRQ_BUFFER.is_empty(cpuid) {
+                if !is_empty {
+                    self.spawn(ktask_extint as usize, cpuid);
+                }
+            }
+        }
+
         let live_cnt = self.get_scheduable_cnt(cpuid);
         self.generate_next(cpuid)?;
         self.current_task[cpuid] = self.next_task[cpuid];
-
 
         if let Some(cur_taskidx) = self.current_task[cpuid] {
             match self.POOL[cpuid] {

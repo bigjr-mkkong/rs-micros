@@ -1,8 +1,10 @@
 use crate::cpu::{busy_delay, set_cpu_mode, M_cli, M_sti, Mode, TrapFrame};
+use crate::irq::{int_request, int_type};
+use crate::ktask::ktask_extint;
 use crate::plic;
 use crate::proc::{task_pool, task_state, task_struct};
-use crate::ktask::{ktask_uart};
 use crate::EXTINT_SRCS;
+use crate::IRQ_BUFFER;
 use crate::KTHREAD_POOL;
 use crate::SECALL_FRAME;
 use crate::{ecall_args, S2Mop};
@@ -85,29 +87,38 @@ extern "C" fn m_trap(
                 unsafe {
                     let current_ctx = plic::id2plic_ctx(hart);
                     let extint_id = PLIC.claim(&current_ctx).unwrap_or(60);
+                    let mut data: Option<usize> = None;
                     match extint_id {
                         10 => {
                             let ch_get = M_UART.lock().get();
                             if let Some(ch) = ch_get {
-                                Mprintln!("Uart extint at CPU#{}: {}", hart, ch as char);
+                                data = Some(ch as usize);
                             } else {
-                                Mprintln!("Uart extint at CPU#{}: Failed", hart);
+                                data = None;
                             }
                         }
                         0 => {
                             //do nothing when 0
                         }
                         _ => {
-                            Mprintln!("Unsupported extint: #{} on CPU#{}", extint_id, hart);
+                            panic!("Unsupported extint: #{} on CPU#{}", extint_id, hart);
                         }
                     }
+
                     PLIC.complete(&current_ctx, extint_id);
 
-                    // KTHREAD_POOL.spawn(ktask_uart as usize, hart);
+                    if let Ok(is_full) = IRQ_BUFFER.is_full(hart) {
+                        if !is_full {
+                            let mut new_irq_req: int_request = int_request::new();
 
-                    // KTHREAD_POOL.save_from_ktrapframe(hart);
-                    // KTHREAD_POOL.set_currentPC(hart, pc_ret);
-                    // KTHREAD_POOL.join_all_ktask(hart);
+                            new_irq_req.set_typ(int_type::EXTERNAL);
+                            new_irq_req.set_extint_id(extint_id);
+                            new_irq_req.set_cpuid(hart);
+                            new_irq_req.set_data(data);
+
+                            IRQ_BUFFER.push_req(new_irq_req, hart);
+                        }
+                    }
                 }
             }
             _ => {

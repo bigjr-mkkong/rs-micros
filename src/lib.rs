@@ -40,17 +40,19 @@ use riscv::register::{medeleg, mideleg, mie, mstatus, sie, sstatus};
 use spin::Mutex;
 
 use crate::lock::spin_mutex;
-use crate::lock::{M_lock, S_lock, Critical_Area};
+use crate::lock::{Critical_Area, M_lock, S_lock};
 use alloc::vec::Vec;
 use clint::clint_controller;
 use cpu::{get_cpu_mode, which_cpu, SATP_mode, TrapFrame};
 use ecall::{ecall_args, S2Mop};
 use error::{KError, KErrorType};
+use irq::{int_request, soft_irq_buf};
 use ktask::{KHello_task0, KHello_task1};
 use nobsp_kfunc::kinit as nobsp_kinit;
 use nobsp_kfunc::kmain as nobsp_kmain;
 use plic::{extint_name, extint_src, plic_controller, plic_ctx};
 use proc::{task_pool, task_struct};
+use ringbuffer::AllocRingBuffer;
 use vm::{ident_range_map, virt2phys};
 use zone::{kfree_page, kmalloc_page, zone_type};
 
@@ -183,6 +185,8 @@ pub static mut cust_hmalloc: spin_mutex<allocator::custom_kheap_malloc, S_lock> 
 >::new(
     allocator::custom_kheap_malloc::new(),
 );
+
+pub static mut IRQ_BUFFER: soft_irq_buf = soft_irq_buf::new();
 
 #[global_allocator]
 pub static glob_alloc: allocator::kheap_alloc = allocator::kheap_alloc::new();
@@ -453,6 +457,10 @@ fn kmain(current_cpu: usize) -> Result<(), KError> {
         Sprintln!("{}", i);
     }
 
+    unsafe {
+        IRQ_BUFFER.init();
+    }
+
     Sprintln!("---------->>Start Process<<----------");
     unsafe {
         let mut pcb_khello: task_struct = task_struct::new();
@@ -460,11 +468,11 @@ fn kmain(current_cpu: usize) -> Result<(), KError> {
         let sched_cpu = which_cpu();
 
         KTHREAD_POOL.spawn(KHello_task0 as usize, sched_cpu)?;
-        // KTHREAD_POOL.spawn(KHello_task1 as usize, sched_cpu)?;
+        KTHREAD_POOL.spawn(KHello_task1 as usize, sched_cpu)?;
         KTHREAD_POOL.join_all_ktask(sched_cpu);
     }
 
-    loop{
+    loop {
         cpu::busy_delay(1);
     }
 
@@ -478,6 +486,7 @@ pub mod clint;
 pub mod cpu;
 pub mod ecall;
 pub mod error;
+pub mod irq;
 pub mod kmem;
 pub mod ktask;
 pub mod ktask_manager;
