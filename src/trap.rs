@@ -2,7 +2,7 @@ use crate::cpu::{busy_delay, set_cpu_mode, M_cli, M_sti, Mode, TrapFrame};
 use crate::irq::{int_request, int_type};
 use crate::ktask::ktask_extint;
 use crate::plic;
-use crate::proc::{task_pool, task_state, task_struct};
+use crate::proc::{task_pool, task_state, task_struct, task_flag};
 use crate::EXTINT_SRCS;
 use crate::IRQ_BUFFER;
 use crate::KTHREAD_POOL;
@@ -226,6 +226,10 @@ fn ecall_handler(pc_ret: usize, hart: usize) {
                 panic!("Supervisor is tring to call undefined operation");
             }
             S2Mop::YIELD => {
+                if let Ok(task_flag::CRITICAL) = KTHREAD_POOL.get_current_fg(hart) {
+                    let prev_mie = KTHREAD_POOL.get_int_buf();
+                    M_sti(prev_mie[hart]);
+                }
                 KTHREAD_POOL.save_from_ktrapframe(hart);
                 KTHREAD_POOL.set_currentPC(hart, pc_ret + 4);
                 KTHREAD_POOL.sched(hart);

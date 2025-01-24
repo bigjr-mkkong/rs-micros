@@ -33,7 +33,7 @@ pub extern "C" fn ktask_extint() {
         unsafe {
             if let Ok(is_empty) = IRQ_BUFFER.is_empty(cpuid) {
                 if is_empty {
-                    break;
+                    trapping(S2Mop::YIELD, None);
                 } else {
                     let new_req = IRQ_BUFFER.peek_req(cpuid).unwrap_or_default().unwrap();
                     IRQ_BUFFER.dequeue_req(cpuid);
@@ -72,4 +72,10 @@ pub extern "C" fn ktask_fallback() {
         which_cpu()
     );
     trapping(S2Mop::YIELD, None);
+}
+
+
+#[no_mangle]
+pub extern "C" fn paniker() {
+    loop{}
 }

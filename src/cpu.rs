@@ -256,7 +256,7 @@ pub extern "C" fn which_cpu() -> usize {
 pub fn S_cli() -> usize {
     let mut prev_sie: usize;
     unsafe {
-        sstatus::clear_sie();
+        // sstatus::clear_sie();
         prev_sie = sie_read();
         sie_write(0);
     }
@@ -266,14 +266,13 @@ pub fn S_cli() -> usize {
 pub fn S_sti(prev_sie: usize) {
     unsafe {
         sie_write(prev_sie);
-        sstatus::set_sie();
+        // sstatus::set_sie();
     }
 }
 
 pub fn M_cli() -> usize {
     let mut prev_mie: usize;
     unsafe {
-        mstatus::clear_mie();
         prev_mie = mie_read();
         mie_write(0);
     }
@@ -283,7 +282,6 @@ pub fn M_cli() -> usize {
 pub fn M_sti(prev_mie: usize) {
     unsafe {
         mie_write(prev_mie);
-        mstatus::set_mie();
     }
 }
 

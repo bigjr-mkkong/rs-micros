@@ -11,7 +11,7 @@ use crate::lock::spin_mutex;
 use crate::lock::{M_lock, S_lock};
 use crate::page;
 use crate::plic::{extint_name, extint_src, plic_controller, plic_ctx};
-use crate::proc::task_struct;
+use crate::proc::{task_struct, task_flag};
 use crate::vm::{ident_range_map, virt2phys};
 use crate::zone::{kfree_page, kmalloc_page, zone_type};
 use crate::CLINT;
@@ -75,8 +75,8 @@ pub fn kmain() -> Result<(), KError> {
 
         let mut khello_task: task_struct = task_struct::new();
         let mut second_task_pcb: task_struct = task_struct::new();
-        khello_task.init(KHello_task0 as usize);
-        second_task_pcb.init(KHello_task1 as usize);
+        khello_task.init(KHello_task0 as usize, task_flag::NORMAL);
+        second_task_pcb.init(KHello_task1 as usize, task_flag::NORMAL);
 
         KTHREAD_POOL.append_task(khello_task, which_cpu());
         KTHREAD_POOL.append_task(second_task_pcb, which_cpu());

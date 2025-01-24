@@ -1,12 +1,12 @@
 use crate::error::{KError, KErrorType};
 use crate::new_kerror;
-use crate::proc::{task_pool, task_state, task_struct};
+use crate::proc::{task_pool, task_state, task_struct, task_flag};
 use crate::KTHREAD_POOL;
 
 impl task_pool {
-    pub fn spawn(&mut self, func: usize, cpuid: usize) -> Result<(), KError> {
+    pub fn spawn(&mut self, func: usize, new_flag: task_flag, cpuid: usize) -> Result<(), KError> {
         let mut pcb_newtask = task_struct::new();
-        pcb_newtask.init(func)?;
+        pcb_newtask.init(func, new_flag)?;
         self.append_task(pcb_newtask, cpuid)?;
         Ok(())
     }

@@ -3,7 +3,7 @@ use crate::alloc::vec::Vec;
 use crate::asm;
 use crate::cpu::{
     busy_delay, get_cpu_mode, make_satp, mepc_read, mepc_write, mscratch_write, satp_write,
-    sscratch_write, which_cpu, Mode, SATP_mode, TrapFrame, MAX_HARTS,
+    sscratch_write, which_cpu, Mode, SATP_mode, TrapFrame, MAX_HARTS, M_cli, M_sti
 };
 use crate::ecall;
 use crate::ecall::S2Mop;
@@ -35,6 +35,12 @@ pub enum task_typ {
     USER_TASK,
 }
 
+#[derive(Clone, Copy)]
+pub enum task_flag {
+    CRITICAL,
+    NORMAL,
+}
+
 const KTASK_STACK_SZ: usize = 1 * PAGE_SIZE;
 const KTASK_EXPSTACK_SZ: usize = 1 * PAGE_SIZE;
 /*
@@ -50,6 +56,7 @@ pub struct task_struct {
     cpu: usize,
     pid: usize,
     typ: task_typ,
+    flag: task_flag
 }
 
 impl Drop for task_struct {
@@ -78,6 +85,7 @@ impl task_struct {
             exp_stack_base: 0 as usize,
             pid: 0 as usize,
             typ: task_typ::KERN_TASK,
+            flag: task_flag::NORMAL
         }
     }
 
@@ -89,10 +97,11 @@ impl task_struct {
         self.state = new_state;
     }
 
-    pub fn init(&mut self, func: usize) -> Result<usize, KError> {
+    pub fn init(&mut self, func: usize, new_flag: task_flag) -> Result<usize, KError> {
         self.cpu = which_cpu();
         self.trap_frame.cpuid = self.cpu;
         self.state = task_state::Ready;
+        self.flag = new_flag;
         if let task_typ::KERN_TASK = self.typ {
             self.trap_frame.satp = get_ksatp() as usize;
             let pageroot_ptr = get_page_table();
@@ -342,6 +351,7 @@ pub struct task_pool {
     current_task: [Option<usize>; MAX_HARTS],
     next_task: [Option<usize>; MAX_HARTS],
     fallback_task: [Option<Box<task_struct>>; MAX_HARTS],
+    interrupt_state: [usize; MAX_HARTS]
 }
 
 impl task_pool {
@@ -352,6 +362,7 @@ impl task_pool {
             current_task: [None, None, None, None],
             next_task: [None, None, None, None],
             fallback_task: [None, None, None, None],
+            interrupt_state: [0; MAX_HARTS]
         }
     }
 
@@ -362,7 +373,7 @@ impl task_pool {
             }
             for fallbacker in self.fallback_task.iter_mut() {
                 let mut fallb = task_struct::new();
-                fallb.init(ktask_fallback as usize);
+                fallb.init(ktask_fallback as usize, task_flag::NORMAL);
 
                 *fallbacker = Some(Box::new(fallb));
             }
@@ -456,6 +467,30 @@ impl task_pool {
         }
     }
 
+
+    pub fn get_int_buf(&self) -> &[usize; MAX_HARTS] {
+        &self.interrupt_state
+    }
+
+    pub fn set_mie_state(&mut self, mie_val: usize, cpuid: usize) {
+        self.interrupt_state[cpuid] = mie_val;
+    }
+
+    pub fn get_current_fg(&self, cpuid: usize) -> Result<task_flag, KError> {
+        if let Some(cur_taskidx) = self.current_task[cpuid] {
+            match self.POOL[cpuid] {
+                Some(ref taskvec) => {
+                    Ok(taskvec[cur_taskidx].flag)
+                }
+                None => {
+                    return Err(new_kerror!(KErrorType::EINVAL));
+                }
+            }
+        } else {
+            return Err(new_kerror!(KErrorType::EINVAL));
+        }
+    }
+
     fn get_scheduable_cnt(&self, cpuid: usize) -> usize {
         match self.POOL[cpuid] {
             Some(ref taskvec) => {
@@ -530,14 +565,6 @@ impl task_pool {
      * We need to make sure extint-handler will not preempt when it is executing
      */
     pub fn sched(&mut self, cpuid: usize) -> Result<(), KError> {
-        unsafe {
-            if let Ok(is_empty) = IRQ_BUFFER.is_empty(cpuid) {
-                if !is_empty {
-                    self.spawn(ktask_extint as usize, cpuid);
-                }
-            }
-        }
-
         let live_cnt = self.get_scheduable_cnt(cpuid);
         self.generate_next(cpuid)?;
         self.current_task[cpuid] = self.next_task[cpuid];
@@ -554,7 +581,13 @@ impl task_pool {
                         return Ok(());
                     }
 
+
                     if let Mode::Machine = get_cpu_mode(cpuid) {
+                        if let task_flag::CRITICAL = taskvec[cur_taskidx].flag {
+                            let prev_xie = M_cli();
+                            self.interrupt_state[cpuid] = prev_xie;
+                        }
+
                         taskvec[cur_taskidx].resume_from_M();
                         Ok(())
                     } else {

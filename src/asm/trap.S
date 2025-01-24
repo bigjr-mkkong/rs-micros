@@ -115,6 +115,7 @@ s_trap_vector:
 m_trap_vector:
 #KERNEL_TRAP_FRAME addr is inside mscratch
     csrrw   s1, mscratch, s1
+    beqz    s1, paniker
 
 # Save GP regs
     sd      x0,  0   * 8(s1)
