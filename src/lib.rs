@@ -429,7 +429,6 @@ fn kinit() -> Result<usize, KError> {
 
     unsafe {
         KTHREAD_POOL.init(cpu::MAX_HARTS);
-        KTHREAD_POOL.set_mie_state(mie::read().bits(), current_cpu);
 
     }
     /*

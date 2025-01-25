@@ -279,9 +279,15 @@ pub fn M_cli() -> usize {
     prev_mie
 }
 
+/*
+ * M_sti will only write to mie if current mie is 0
+ */
 pub fn M_sti(prev_mie: usize) {
     unsafe {
-        mie_write(prev_mie);
+        let mie_now = mie_read();
+        if mie_now == 0 {
+            mie_write(prev_mie);
+        }
     }
 }
 

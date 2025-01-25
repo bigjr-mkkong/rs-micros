@@ -472,10 +472,6 @@ impl task_pool {
         &self.interrupt_state
     }
 
-    pub fn set_mie_state(&mut self, mie_val: usize, cpuid: usize) {
-        self.interrupt_state[cpuid] = mie_val;
-    }
-
     pub fn get_current_fg(&self, cpuid: usize) -> Result<task_flag, KError> {
         if let Some(cur_taskidx) = self.current_task[cpuid] {
             match self.POOL[cpuid] {
