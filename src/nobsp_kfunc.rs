@@ -6,7 +6,7 @@ use spin::Mutex;
 
 use crate::cpu::{which_cpu, SATP_mode, TrapFrame};
 use crate::error::{KError, KErrorType};
-use crate::ktask::{KHello_task0, KHello_task1};
+use crate::ktask::{KHello_task0, KHello_task1, ktask_extint};
 use crate::lock::spin_mutex;
 use crate::lock::{M_lock, S_lock};
 use crate::page;
@@ -73,14 +73,12 @@ pub fn kmain() -> Result<(), KError> {
         Sprintln!("CPU{} Back from trap\n", current_cpu);
         CLINT.set_mtimecmp(current_cpu, CLINT.read_mtime() + 0x500_000);
 
-        let mut khello_task: task_struct = task_struct::new();
-        let mut second_task_pcb: task_struct = task_struct::new();
-        khello_task.init(KHello_task0 as usize, task_flag::NORMAL);
-        second_task_pcb.init(KHello_task1 as usize, task_flag::NORMAL);
+        let sched_cpu = which_cpu();
 
-        KTHREAD_POOL.append_task(khello_task, which_cpu());
-        KTHREAD_POOL.append_task(second_task_pcb, which_cpu());
-        KTHREAD_POOL.sched(which_cpu());
+        KTHREAD_POOL.spawn(KHello_task0 as usize, task_flag::NORMAL, sched_cpu)?;
+        KTHREAD_POOL.spawn(KHello_task1 as usize, task_flag::NORMAL, sched_cpu)?;
+        KTHREAD_POOL.spawn(ktask_extint as usize, task_flag::CRITICAL, sched_cpu)?;
+        KTHREAD_POOL.join_all_ktask(sched_cpu);
     }
 
     loop {

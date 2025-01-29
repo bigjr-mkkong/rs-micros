@@ -464,8 +464,8 @@ fn kmain(current_cpu: usize) -> Result<(), KError> {
 
     Sprintln!("---------->>Start Process<<----------");
     unsafe {
-        let mut pcb_khello: task_struct = task_struct::new();
-        let mut pcb_second: task_struct = task_struct::new();
+        // let mut pcb_khello: task_struct = task_struct::new();
+        // let mut pcb_second: task_struct = task_struct::new();
         let sched_cpu = which_cpu();
 
         KTHREAD_POOL.spawn(KHello_task0 as usize, task_flag::NORMAL, sched_cpu)?;
@@ -501,3 +501,4 @@ pub mod trap;
 pub mod uart;
 pub mod vm;
 pub mod zone;
+pub mod ksemaphore;
