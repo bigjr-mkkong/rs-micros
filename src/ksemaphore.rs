@@ -3,12 +3,12 @@ use crate::alloc::vec::Vec;
 use crate::error::{KError, KErrorType};
 use crate::new_kerror;
 use crate::lock::spin_mutex;
-use crate::task_struct;
+use crate::{task_struct};
 use crate::lock::{Critical_Area, M_lock, S_lock};
 
 struct semaphore{
     cnt: spin_mutex<i32, S_lock>,
-    wait_q: Option<Box<Vec<task_struct>>>
+    wait_q: Vec<usize>
 }
 
 impl semaphore {
@@ -16,7 +16,7 @@ impl semaphore {
         assert!(new_cnt >= 0, "Semaphore must be non-negative!");
         Self{
             cnt: spin_mutex::new(new_cnt),
-            wait_q: None
+            wait_q: Vec::new()
         }
     }
 

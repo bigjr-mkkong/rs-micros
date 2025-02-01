@@ -18,7 +18,10 @@ use crate::IRQ_BUFFER;
 use crate::KERNEL_TRAP_FRAME;
 use crate::{M_UART, S_UART};
 use core::cell::UnsafeCell;
+use core::hash::*;
 use riscv::register::{mstatus, sstatus};
+use cbitmap::bitmap::*;
+use crate::lock::{spin_mutex, S_lock};
 
 #[derive(Clone, Copy)]
 pub enum task_state {
@@ -41,6 +44,7 @@ pub enum task_flag {
     NORMAL,
 }
 
+const MAX_KTASK: usize = 100;
 const KTASK_STACK_SZ: usize = 1 * PAGE_SIZE;
 const KTASK_EXPSTACK_SZ: usize = 1 * PAGE_SIZE;
 /*
@@ -351,7 +355,8 @@ pub struct task_pool {
     current_task: [Option<usize>; MAX_HARTS],
     next_task: [Option<usize>; MAX_HARTS],
     fallback_task: [Option<Box<task_struct>>; MAX_HARTS],
-    interrupt_state: [usize; MAX_HARTS]
+    interrupt_state: [usize; MAX_HARTS],
+    pidmap: Option<spin_mutex<Bitmap::<{MAX_KTASK / 8}>, S_lock>>
 }
 
 impl task_pool {
@@ -362,7 +367,8 @@ impl task_pool {
             current_task: [None, None, None, None],
             next_task: [None, None, None, None],
             fallback_task: [None, None, None, None],
-            interrupt_state: [0; MAX_HARTS]
+            interrupt_state: [0; MAX_HARTS],
+            pidmap: None
         }
     }
 
@@ -379,9 +385,30 @@ impl task_pool {
             }
             self.next_task[cpuid] = Some(0);
             self.current_task[cpuid] = Some(0);
+            self.pidmap = Some(spin_mutex::new(Bitmap::new()));
         }
     }
 
+    fn get_new_pid(&mut self) -> usize{
+        let bind = self.pidmap.as_mut().unwrap();
+        let mut idmap = bind.lock();
+        let newid = idmap.find_first_zero();
+        match newid{
+            Some(new_id) => {
+                idmap.set(new_id);
+                return new_id;
+            },
+            None => {
+                panic!("Run out of task pid");
+            }
+        }
+    }
+
+    fn reclaim_pid(&mut self, oldpid: usize){
+        let bind = self.pidmap.as_mut().unwrap();
+        let mut idmap = bind.lock();
+        idmap.set(oldpid);
+    }
     fn generate_next(&mut self, cpuid: usize) -> Result<(), KError> {
         let taskq = self.POOL[cpuid]
             .as_ref()
@@ -512,7 +539,8 @@ impl task_pool {
         }
     }
 
-    pub fn append_task(&mut self, new_task: task_struct, cpuid: usize) -> Result<(), KError> {
+    pub fn append_task(&mut self, mut new_task: task_struct, cpuid: usize) -> Result<(), KError> {
+        new_task.pid = self.get_new_pid();
         if let Some(boxvec) = &mut self.POOL[cpuid] {
             boxvec.push(new_task);
         } else {
@@ -523,15 +551,18 @@ impl task_pool {
     }
 
     pub fn remove_cur_task(&mut self, cpuid: usize) -> Result<(), KError> {
+        let mut died_pid: usize = 0;
         if let Some(cur_taskidx) = &mut self.current_task[cpuid] {
             match &mut self.POOL[cpuid] {
                 Some(ref mut boxvec) => {
+                    died_pid = boxvec[*cur_taskidx].pid;
                     boxvec.swap_remove(*cur_taskidx);
                 }
                 None => {
                     return Err(new_kerror!(KErrorType::EFAULT));
                 }
             }
+            self.reclaim_pid(died_pid);
         }
 
         Ok(())
