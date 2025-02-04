@@ -63,6 +63,7 @@ pub struct task_struct {
     pid: usize,
     typ: task_typ,
     flag: task_flag,
+    life_id: usize
 }
 
 impl Drop for task_struct {
@@ -92,6 +93,7 @@ impl task_struct {
             pid: 0 as usize,
             typ: task_typ::KERN_TASK,
             flag: task_flag::NORMAL,
+            life_id: 0
         }
     }
 
@@ -103,6 +105,13 @@ impl task_struct {
         self.state = new_state;
     }
 
+    pub fn get_lifeid(&self) -> usize {
+        self.life_id
+    }
+
+    pub fn set_lifeid(&mut self, new_lifeid: usize) {
+        self.life_id = new_lifeid;
+    }
     pub fn init(&mut self, func: usize, new_flag: task_flag) -> Result<usize, KError> {
         self.cpu = which_cpu();
         self.trap_frame.cpuid = self.cpu;
@@ -359,6 +368,7 @@ pub struct task_pool {
     crit_task_intstate: [usize; MAX_HARTS],
     pidmap: Option<spin_mutex<Bitmap<{ (MAX_KTASK / 8) + 1 }>, S_lock>>,
     pub sems: [Option<Vec<kt_semaphore>>; MAX_HARTS],
+    life_id: spin_mutex<usize, S_lock>
 }
 
 impl task_pool {
@@ -372,6 +382,7 @@ impl task_pool {
             crit_task_intstate: [0; MAX_HARTS],
             pidmap: None,
             sems: [None, None, None, None],
+            life_id: spin_mutex::<usize, S_lock>::new(1),
         }
     }
 
@@ -527,6 +538,19 @@ impl task_pool {
         }
     }
 
+    pub fn get_current_lifeid(&self, cpuid: usize) -> Result<usize, KError> {
+        if let Some(cur_taskidx) = self.current_task[cpuid] {
+            match self.POOL[cpuid] {
+                Some(ref taskvec) => Ok(taskvec[cur_taskidx].life_id),
+                None => {
+                    return Err(new_kerror!(KErrorType::EINVAL));
+                }
+            }
+        } else {
+            return Err(new_kerror!(KErrorType::EINVAL));
+        }
+    }
+
     fn get_scheduable_cnt(&self, cpuid: usize) -> usize {
         match self.POOL[cpuid] {
             Some(ref taskvec) => {
@@ -554,6 +578,13 @@ impl task_pool {
 
     pub fn append_task(&mut self, mut new_task: task_struct, cpuid: usize) -> Result<(), KError> {
         new_task.pid = self.get_new_pid();
+
+        let mut new_lifeid = self.life_id.lock();
+
+        new_task.life_id = *new_lifeid;
+        *new_lifeid += 1;
+        drop(new_lifeid);
+
         if let Some(boxvec) = &mut self.POOL[cpuid] {
             boxvec.push(new_task);
         } else {
@@ -651,12 +682,14 @@ impl task_pool {
     pub fn set_state_by_pid(
         &mut self,
         target_pid: usize,
+        target_lifeid: usize,
         new_state: task_state,
     ) -> Result<(), KError> {
         for cpuid in 0..MAX_HARTS {
             if let Some(ref mut taskvec) = self.POOL[cpuid] {
                 for task in taskvec.iter_mut() {
-                    if task.pid == target_pid {
+                    if task.pid == target_pid{
+                        assert!(task.life_id == target_lifeid);
                         task.set_state(new_state);
                         return Ok(());
                     }
@@ -665,29 +698,13 @@ impl task_pool {
         }
         Err(new_kerror!(KErrorType::EFAULT))
     }
-
-    /*
-     * semaphore wrappers
-     * semaphore type: (cpuid, semidx)
-     */
-    // pub fn new_sem(&mut self, cpuid: usize, init_val: i32) -> (usize, usize) {
-    //     let sem = kt_semaphore::new(init_val);
-    //     let mut sem_vec = self.sems[cpuid].as_mut().unwrap();
-    //     sem_vec.push(sem);
-    //     return (cpuid, sem_vec.len() - 1)
-    // }
-
-    // pub fn kt_wait(&mut self, (cpuid, sem_idx): (usize, usize)) {
-    //     let mut sem_vec = self.sems[cpuid].as_mut().unwrap();
-    //     sem_vec[sem_idx].wait();
-    // }
-
-    // pub fn kt_signal(&mut self, (cpuid, sem_idx): (usize, usize)) {
-    //     let mut sem_vec = self.sems[cpuid].as_mut().unwrap();
-    //     sem_vec[sem_idx].signal();
-    // }
 }
 
-pub fn get_ktpid(cpuid: usize) -> Result<usize, KError> {
-    unsafe { KTHREAD_POOL.get_current_pid(cpuid) }
+pub fn get_ktpid_lifeid(cpuid: usize) -> Result<(usize, usize), KError> {
+    unsafe { 
+        let pid = KTHREAD_POOL.get_current_pid(cpuid)?;
+        let lifeid = KTHREAD_POOL.get_current_lifeid(cpuid)?;
+        Ok((pid, lifeid))
+
+    }
 }

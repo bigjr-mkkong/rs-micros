@@ -1,4 +1,4 @@
-use crate::cpu::{busy_delay, set_cpu_mode, M_cli, M_sti, Mode, TrapFrame};
+use crate::cpu::{busy_delay, set_cpu_mode, M_cli, M_sti, Mode, TrapFrame, which_cpu};
 use crate::irq::{int_request, int_type};
 use crate::ktask::ktask_extint;
 use crate::kthread::{task_flag, task_pool, task_state, task_struct};
@@ -249,22 +249,28 @@ fn ecall_handler(pc_ret: usize, hart: usize) {
                 }
                 let args = SECALL_FRAME[hart].get_args();
                 let target_pid = args[0];
+                let target_lifeid = args[1];
+                assert_ne!(target_pid, 1000);
+                assert_ne!(target_lifeid, 0);
 
                 KTHREAD_POOL.save_from_ktrapframe(hart);
                 KTHREAD_POOL.set_currentPC(hart, pc_ret + 4);
 
-                KTHREAD_POOL.set_state_by_pid(target_pid, task_state::Block);
+                KTHREAD_POOL.set_state_by_pid(target_pid, target_lifeid, task_state::Block);
 
                 KTHREAD_POOL.sched(hart);
             }
             S2Mop::UNBLOCK => {
                 let args = SECALL_FRAME[hart].get_args();
                 let target_pid = args[0];
+                let target_lifeid = args[1];
+                assert_ne!(target_pid, 1000);
+                assert_ne!(target_lifeid, 0);
 
                 KTHREAD_POOL.save_from_ktrapframe(hart);
                 KTHREAD_POOL.set_currentPC(hart, pc_ret + 4);
 
-                KTHREAD_POOL.set_state_by_pid(target_pid, task_state::Ready);
+                KTHREAD_POOL.set_state_by_pid(target_pid, target_lifeid, task_state::Ready);
             }
             S2Mop::CLI => {
                 let prev_mie = M_cli();
