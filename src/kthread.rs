@@ -25,6 +25,9 @@ use core::cell::UnsafeCell;
 use core::hash::*;
 use riscv::register::{mstatus, sstatus};
 
+pub const MAX_KTHREADS: usize = 256;
+pub const INVAL_KTHREADS_PID: usize = MAX_KTHREADS + 10;
+
 #[derive(Clone, Copy)]
 pub enum task_state {
     Ready,

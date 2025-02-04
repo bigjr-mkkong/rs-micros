@@ -10,6 +10,7 @@ use crate::new_kerror;
 use crate::task_struct;
 use crate::which_cpu;
 use crate::KTHREAD_POOL;
+use crate::kthread::INVAL_KTHREADS_PID;
 
 // (pid, lifeid)
 pub struct kt_semaphore {
@@ -28,8 +29,8 @@ impl kt_semaphore {
 
     pub fn wait(&mut self) {
         let cpuid = which_cpu();
-        let (pid, lifeid) = get_ktpid_lifeid(cpuid).unwrap_or((1000, 0));
-        assert_ne!(pid, 1000);
+        let (pid, lifeid) = get_ktpid_lifeid(cpuid).unwrap_or((INVAL_KTHREADS_PID, 0));
+        assert_ne!(pid, INVAL_KTHREADS_PID);
         assert_ne!(lifeid, 0);
 
         let mut cnt = self.cnt.lock();
@@ -46,8 +47,8 @@ impl kt_semaphore {
     }
 
     pub fn signal(&mut self, hart: Option<usize>) {
-        let cpuid = hart.unwrap_or(1000);
-        assert_ne!(cpuid, 1000);
+        let cpuid = hart.unwrap_or(INVAL_KTHREADS_PID);
+        assert_ne!(cpuid, INVAL_KTHREADS_PID);
         let mut cnt = self.cnt.lock();
         *cnt += 1;
 

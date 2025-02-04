@@ -12,6 +12,7 @@ use crate::SECALL_FRAME;
 use crate::{ecall_args, S2Mop};
 use crate::{CLINT, PLIC};
 use crate::{M_UART, S_UART};
+use crate::kthread::INVAL_KTHREADS_PID;
 
 use riscv::register;
 use riscv::register::{mstatus, mstatus::MPP, sstatus, sstatus::SPP};
@@ -250,7 +251,7 @@ fn ecall_handler(pc_ret: usize, hart: usize) {
                 let args = SECALL_FRAME[hart].get_args();
                 let target_pid = args[0];
                 let target_lifeid = args[1];
-                assert_ne!(target_pid, 1000);
+                assert_ne!(target_pid, INVAL_KTHREADS_PID);
                 assert_ne!(target_lifeid, 0);
 
                 KTHREAD_POOL.save_from_ktrapframe(hart);
@@ -264,7 +265,7 @@ fn ecall_handler(pc_ret: usize, hart: usize) {
                 let args = SECALL_FRAME[hart].get_args();
                 let target_pid = args[0];
                 let target_lifeid = args[1];
-                assert_ne!(target_pid, 1000);
+                assert_ne!(target_pid, INVAL_KTHREADS_PID);
                 assert_ne!(target_lifeid, 0);
 
                 KTHREAD_POOL.save_from_ktrapframe(hart);

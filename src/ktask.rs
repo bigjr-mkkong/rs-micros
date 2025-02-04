@@ -9,12 +9,13 @@ use crate::sem_uart;
 use crate::IRQ_BUFFER;
 use crate::{M_UART, S_UART};
 use alloc::vec::Vec;
+use crate::kthread::INVAL_KTHREADS_PID;
 
 #[no_mangle]
 pub extern "C" fn KHello_task0() {
     let cpuid = which_cpu();
-    let (pid, lifeid): (usize, usize) = get_ktpid_lifeid(cpuid).unwrap_or((1000, 0));
-    assert_ne!(pid, 1000);
+    let (pid, lifeid): (usize, usize) = get_ktpid_lifeid(cpuid).unwrap_or((INVAL_KTHREADS_PID, 0));
+    assert_ne!(pid, INVAL_KTHREADS_PID);
     assert_ne!(lifeid, 0);
     loop {
         busy_delay(1);
@@ -27,8 +28,8 @@ pub extern "C" fn KHello_task0() {
 #[no_mangle]
 pub extern "C" fn KHello_task1() {
     let cpuid = which_cpu();
-    let (pid, lifeid): (usize, usize) = get_ktpid_lifeid(cpuid).unwrap_or((1000, 0));
-    assert_ne!(pid, 1000);
+    let (pid, lifeid): (usize, usize) = get_ktpid_lifeid(cpuid).unwrap_or((INVAL_KTHREADS_PID, 0));
+    assert_ne!(pid, INVAL_KTHREADS_PID);
     assert_ne!(lifeid, 0);
     loop {
         busy_delay(1);
@@ -41,8 +42,8 @@ pub extern "C" fn KHello_task1() {
 #[no_mangle]
 pub extern "C" fn ksem_test0() {
     let cpuid = which_cpu();
-    let (pid, lifeid): (usize, usize) = get_ktpid_lifeid(cpuid).unwrap_or((1000, 0));
-    assert_ne!(pid, 1000);
+    let (pid, lifeid): (usize, usize) = get_ktpid_lifeid(cpuid).unwrap_or((INVAL_KTHREADS_PID, 0));
+    assert_ne!(pid, INVAL_KTHREADS_PID);
     assert_ne!(lifeid, 0);
     unsafe {
         loop {
