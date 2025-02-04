@@ -3,6 +3,7 @@ use crate::alloc::vec::Vec;
 use crate::cpu::{get_cpu_mode, Mode};
 use crate::ecall::{trapping, S2Mop};
 use crate::error::{KError, KErrorType};
+use crate::kthread::INVAL_KTHREADS_PID;
 use crate::kthread::{get_ktpid_lifeid, task_state};
 use crate::lock::spin_mutex;
 use crate::lock::{Critical_Area, M_lock, S_lock};
@@ -10,7 +11,6 @@ use crate::new_kerror;
 use crate::task_struct;
 use crate::which_cpu;
 use crate::KTHREAD_POOL;
-use crate::kthread::INVAL_KTHREADS_PID;
 
 // (pid, lifeid)
 pub struct kt_semaphore {

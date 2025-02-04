@@ -66,7 +66,7 @@ pub struct task_struct {
     pid: usize,
     typ: task_typ,
     flag: task_flag,
-    life_id: usize
+    life_id: usize,
 }
 
 impl Drop for task_struct {
@@ -96,7 +96,7 @@ impl task_struct {
             pid: 0 as usize,
             typ: task_typ::KERN_TASK,
             flag: task_flag::NORMAL,
-            life_id: 0
+            life_id: 0,
         }
     }
 
@@ -371,7 +371,7 @@ pub struct task_pool {
     crit_task_intstate: [usize; MAX_HARTS],
     pidmap: Option<spin_mutex<Bitmap<{ (MAX_KTASK / 8) + 1 }>, S_lock>>,
     pub sems: [Option<Vec<kt_semaphore>>; MAX_HARTS],
-    life_id: spin_mutex<usize, S_lock>
+    life_id: spin_mutex<usize, S_lock>,
 }
 
 impl task_pool {
@@ -691,7 +691,7 @@ impl task_pool {
         for cpuid in 0..MAX_HARTS {
             if let Some(ref mut taskvec) = self.POOL[cpuid] {
                 for task in taskvec.iter_mut() {
-                    if task.pid == target_pid{
+                    if task.pid == target_pid {
                         assert!(task.life_id == target_lifeid);
                         task.set_state(new_state);
                         return Ok(());
@@ -704,10 +704,9 @@ impl task_pool {
 }
 
 pub fn get_ktpid_lifeid(cpuid: usize) -> Result<(usize, usize), KError> {
-    unsafe { 
+    unsafe {
         let pid = KTHREAD_POOL.get_current_pid(cpuid)?;
         let lifeid = KTHREAD_POOL.get_current_lifeid(cpuid)?;
         Ok((pid, lifeid))
-
     }
 }

@@ -1,6 +1,7 @@
-use crate::cpu::{busy_delay, set_cpu_mode, M_cli, M_sti, Mode, TrapFrame, which_cpu};
+use crate::cpu::{busy_delay, set_cpu_mode, which_cpu, M_cli, M_sti, Mode, TrapFrame};
 use crate::irq::{int_request, int_type};
 use crate::ktask::ktask_extint;
+use crate::kthread::INVAL_KTHREADS_PID;
 use crate::kthread::{task_flag, task_pool, task_state, task_struct};
 use crate::plic;
 use crate::sem_uart;
@@ -12,7 +13,6 @@ use crate::SECALL_FRAME;
 use crate::{ecall_args, S2Mop};
 use crate::{CLINT, PLIC};
 use crate::{M_UART, S_UART};
-use crate::kthread::INVAL_KTHREADS_PID;
 
 use riscv::register;
 use riscv::register::{mstatus, mstatus::MPP, sstatus, sstatus::SPP};

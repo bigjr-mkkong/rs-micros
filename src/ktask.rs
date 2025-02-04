@@ -5,11 +5,11 @@ use crate::cpu::{
 };
 use crate::ecall::{trapping, S2Mop};
 use crate::kthread::get_ktpid_lifeid;
+use crate::kthread::INVAL_KTHREADS_PID;
 use crate::sem_uart;
 use crate::IRQ_BUFFER;
 use crate::{M_UART, S_UART};
 use alloc::vec::Vec;
-use crate::kthread::INVAL_KTHREADS_PID;
 
 #[no_mangle]
 pub extern "C" fn KHello_task0() {
