@@ -22,6 +22,8 @@ use core::hash::*;
 use riscv::register::{mstatus, sstatus};
 use cbitmap::bitmap::*;
 use crate::lock::{spin_mutex, S_lock};
+use crate::KTHREAD_POOL;
+use crate::ksemaphore::kt_semaphore;
 
 #[derive(Clone, Copy)]
 pub enum task_state {
@@ -110,10 +112,10 @@ impl task_struct {
             self.trap_frame.satp = get_ksatp() as usize;
             let pageroot_ptr = get_page_table();
             let mut pageroot = unsafe { pageroot_ptr.as_mut().unwrap() };
+            self.pc = func;
+            self.pid = 0;
             //initialize kernel task
             unsafe {
-                self.pc = func;
-                self.pid = 0;
 
                 let kt_stack = kmalloc_page(zone_type::ZONE_NORMAL, KTASK_STACK_SZ / PAGE_SIZE)?
                     .add(KTASK_STACK_SZ);
@@ -207,7 +209,7 @@ impl task_struct {
         self.pc = newpc;
     }
 
-    pub fn resume_from_M(&mut self) {
+    pub fn resume_from_M(&self) {
         let next_pc = self.pc;
         unsafe {
             match self.typ {
@@ -280,7 +282,7 @@ impl task_struct {
         }
     }
 
-    pub fn resume_from_S(&mut self) {
+    pub fn resume_from_S(&self) {
         let next_pc = self.pc;
         unsafe {
             match self.typ {
@@ -355,11 +357,12 @@ pub struct task_pool {
     current_task: [Option<usize>; MAX_HARTS],
     next_task: [Option<usize>; MAX_HARTS],
     fallback_task: [Option<Box<task_struct>>; MAX_HARTS],
-    interrupt_state: [usize; MAX_HARTS],
-    pidmap: Option<spin_mutex<Bitmap::<{MAX_KTASK / 8}>, S_lock>>
+    crit_task_intstate: [usize; MAX_HARTS],
+    pidmap: Option<spin_mutex<Bitmap::<{(MAX_KTASK / 8) + 1}>, S_lock>>,
+    pub sems: [Option<Vec::<kt_semaphore>>; MAX_HARTS],
 }
 
-impl task_pool {
+impl task_pool{
     pub const fn new() -> Self {
         Self {
             POOL: [None, None, None, None],
@@ -367,8 +370,9 @@ impl task_pool {
             current_task: [None, None, None, None],
             next_task: [None, None, None, None],
             fallback_task: [None, None, None, None],
-            interrupt_state: [0; MAX_HARTS],
-            pidmap: None
+            crit_task_intstate: [0; MAX_HARTS],
+            pidmap: None,
+            sems: [None, None, None, None],
         }
     }
 
@@ -495,8 +499,8 @@ impl task_pool {
     }
 
 
-    pub fn get_int_buf(&self) -> &[usize; MAX_HARTS] {
-        &self.interrupt_state
+    pub fn get_crit_task_mie(&self) -> &[usize; MAX_HARTS] {
+        &self.crit_task_intstate
     }
 
     pub fn get_current_fg(&self, cpuid: usize) -> Result<task_flag, KError> {
@@ -504,6 +508,21 @@ impl task_pool {
             match self.POOL[cpuid] {
                 Some(ref taskvec) => {
                     Ok(taskvec[cur_taskidx].flag)
+                }
+                None => {
+                    return Err(new_kerror!(KErrorType::EINVAL));
+                }
+            }
+        } else {
+            return Err(new_kerror!(KErrorType::EINVAL));
+        }
+    }
+
+    pub fn get_current_pid(&self, cpuid: usize) -> Result<usize, KError> {
+        if let Some(cur_taskidx) = self.current_task[cpuid] {
+            match self.POOL[cpuid] {
+                Some(ref taskvec) => {
+                    Ok(taskvec[cur_taskidx].pid)
                 }
                 None => {
                     return Err(new_kerror!(KErrorType::EINVAL));
@@ -612,7 +631,7 @@ impl task_pool {
                     if let Mode::Machine = get_cpu_mode(cpuid) {
                         if let task_flag::CRITICAL = taskvec[cur_taskidx].flag {
                             let prev_xie = M_cli();
-                            self.interrupt_state[cpuid] = prev_xie;
+                            self.crit_task_intstate[cpuid] = prev_xie;
                         }
 
                         taskvec[cur_taskidx].resume_from_M();
@@ -629,5 +648,50 @@ impl task_pool {
         } else {
             return Err(new_kerror!(KErrorType::EINVAL));
         }
+    }
+
+    /*
+     * Low efficiency, but correct
+     */
+    pub fn set_state_by_pid(&mut self, target_pid: usize, new_state: task_state) -> Result<(), KError>{
+        for cpuid in 0..MAX_HARTS{
+            if let Some(ref mut taskvec) = self.POOL[cpuid] {
+                for task in taskvec.iter_mut() {
+                    if task.pid == target_pid {
+                        task.set_state(new_state);
+                        return Ok(());
+                    }
+                }
+            }
+        }
+        Err(new_kerror!(KErrorType::EFAULT))
+    }
+
+    /*
+     * semaphore wrappers
+     * semaphore type: (cpuid, semidx)
+     */
+    // pub fn new_sem(&mut self, cpuid: usize, init_val: i32) -> (usize, usize) {
+    //     let sem = kt_semaphore::new(init_val);
+    //     let mut sem_vec = self.sems[cpuid].as_mut().unwrap();
+    //     sem_vec.push(sem);
+    //     return (cpuid, sem_vec.len() - 1)
+    // }
+
+    // pub fn kt_wait(&mut self, (cpuid, sem_idx): (usize, usize)) {
+    //     let mut sem_vec = self.sems[cpuid].as_mut().unwrap();
+    //     sem_vec[sem_idx].wait();
+    // }
+
+    // pub fn kt_signal(&mut self, (cpuid, sem_idx): (usize, usize)) {
+    //     let mut sem_vec = self.sems[cpuid].as_mut().unwrap();
+    //     sem_vec[sem_idx].signal();
+    // }
+
+}
+
+pub fn get_ktpid(cpuid: usize) -> Result<usize, KError> {
+    unsafe{
+        KTHREAD_POOL.get_current_pid(cpuid)
     }
 }

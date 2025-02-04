@@ -8,6 +8,10 @@ use riscv::asm::ecall;
 pub enum S2Mop {
     YIELD,
     EXIT,
+    BLOCK,
+    UNBLOCK,
+    CLI,
+    STI,
     UNDEF,
 }
 

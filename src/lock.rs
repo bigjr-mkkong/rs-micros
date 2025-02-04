@@ -36,20 +36,19 @@ impl IntControl for S_lock {
     }
 }
 
-// impl IntControl for Critical_Area{
-//     fn cli() -> usize{
-//         let cpuid = which_cpu();
-//         assert_eq!(cpuid, 0);
-//         trapping(S2Mop::CLI, None);
-//         unsafe{
-//             SECALL_FRAME[cpuid].get_ret()
-//         }
-//     }
+impl IntControl for Critical_Area{
+    fn cli() -> usize{
+        let cpuid = which_cpu();
+        //4 TEST REASON
+        assert_eq!(cpuid, 0);
+        trapping(S2Mop::CLI, None);
+        0
+    }
 
-//     fn sti(prev_xie: usize){
-//         trapping(S2Mop::STI, Some(&[prev_xie, 0, 0, 0, 0]));
-//     }
-// }
+    fn sti(prev_xie: usize){
+        trapping(S2Mop::STI, None);
+    }
+}
 
 pub struct spin_mutex<T, MODE: IntControl> {
     inner_lock: Mutex<T>,

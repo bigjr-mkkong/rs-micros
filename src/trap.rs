@@ -3,6 +3,7 @@ use crate::irq::{int_request, int_type};
 use crate::ktask::ktask_extint;
 use crate::plic;
 use crate::proc::{task_pool, task_state, task_struct, task_flag};
+use crate::KERNEL_TRAP_FRAME;
 use crate::EXTINT_SRCS;
 use crate::IRQ_BUFFER;
 use crate::KTHREAD_POOL;
@@ -224,20 +225,48 @@ fn ecall_handler(pc_ret: usize, hart: usize) {
         match opcode {
             S2Mop::UNDEF => {
                 panic!("Supervisor is tring to call undefined operation");
-            }
+            },
             S2Mop::YIELD => {
                 if let Ok(task_flag::CRITICAL) = KTHREAD_POOL.get_current_fg(hart) {
-                    let prev_mie = KTHREAD_POOL.get_int_buf();
+                    let prev_mie = KTHREAD_POOL.get_crit_task_mie();
                     M_sti(prev_mie[hart]);
                 }
                 KTHREAD_POOL.save_from_ktrapframe(hart);
                 KTHREAD_POOL.set_currentPC(hart, pc_ret + 4);
                 KTHREAD_POOL.sched(hart);
-            }
+            },
             S2Mop::EXIT => {
                 KTHREAD_POOL.remove_cur_task(hart);
                 KTHREAD_POOL.sched(hart);
                 KTHREAD_POOL.fallback(hart);
+            },
+            S2Mop::BLOCK => {
+                let args = SECALL_FRAME[hart].get_args();
+                let target_pid = args[0];
+
+                KTHREAD_POOL.save_from_ktrapframe(hart);
+                KTHREAD_POOL.set_currentPC(hart, pc_ret + 4);
+
+                KTHREAD_POOL.set_state_by_pid(target_pid, task_state::Block);
+
+                KTHREAD_POOL.sched(hart);
+            },
+            S2Mop::UNBLOCK => {
+                let args = SECALL_FRAME[hart].get_args();
+                let target_pid = args[0];
+
+                KTHREAD_POOL.save_from_ktrapframe(hart);
+                KTHREAD_POOL.set_currentPC(hart, pc_ret + 4);
+
+                KTHREAD_POOL.set_state_by_pid(target_pid, task_state::Ready);
+            },
+            S2Mop::CLI => {
+                let prev_mie = M_cli();
+                KERNEL_TRAP_FRAME[hart].mie_buf = prev_mie;
+            },
+            S2Mop::STI => {
+                let prev_mie = KERNEL_TRAP_FRAME[hart].mie_buf;
+                M_sti(prev_mie);
             }
         }
     }

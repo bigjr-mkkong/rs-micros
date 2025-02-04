@@ -7,23 +7,48 @@ use crate::ecall::{trapping, S2Mop};
 use crate::IRQ_BUFFER;
 use crate::{M_UART, S_UART};
 use alloc::vec::Vec;
+use crate::proc::get_ktpid;
+use crate::sem_test;
+
 
 #[no_mangle]
 pub extern "C" fn KHello_task0() {
+    let cpuid = which_cpu();
+    let pid: usize = get_ktpid(cpuid).unwrap_or(1000);
     loop {
         busy_delay(1);
-        Sprintln!("Hello from KHello_task0() from CPU#{}", which_cpu());
+        
+        Sprintln!("Hello from KHello_task0(pid: {}) from CPU#{}", pid, cpuid);
         trapping(S2Mop::YIELD, None);
     }
 }
 
 #[no_mangle]
 pub extern "C" fn KHello_task1() {
+    let cpuid = which_cpu();
+    let pid: usize = get_ktpid(cpuid).unwrap_or(1000);
     loop {
         busy_delay(1);
-        Sprintln!("Hello from KHello_task1() from CPU#{}", which_cpu());
+        
+        Sprintln!("Hello from KHello_task1(pid: {}) from CPU#{}", pid, cpuid);
         trapping(S2Mop::YIELD, None);
     }
+}
+
+#[no_mangle]
+pub extern "C" fn ksem_test0() {
+    let cpuid = which_cpu();
+    let pid = get_ktpid(cpuid).unwrap_or(1000);
+    assert_ne!(pid, 1000);
+    unsafe{
+        loop{
+            Sprintln!("sem blocked on task#{}", pid);
+            sem_test.wait();
+            Sprintln!("sem unblocked");
+            trapping(S2Mop::YIELD, None);
+        }
+    }
+    trapping(S2Mop::EXIT, None);
 }
 
 #[no_mangle]
@@ -35,6 +60,9 @@ pub extern "C" fn ktask_extint() {
                 if is_empty {
                     trapping(S2Mop::YIELD, None);
                 } else {
+                    unsafe{
+                        sem_test.signal();
+                    }
                     let new_req = IRQ_BUFFER.peek_req(cpuid).unwrap_or_default().unwrap();
                     IRQ_BUFFER.dequeue_req(cpuid);
 
