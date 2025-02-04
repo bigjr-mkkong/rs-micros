@@ -3,27 +3,27 @@ use crate::alloc::vec::Vec;
 use crate::asm;
 use crate::cpu::{
     busy_delay, get_cpu_mode, make_satp, mepc_read, mepc_write, mscratch_write, satp_write,
-    sscratch_write, which_cpu, Mode, SATP_mode, TrapFrame, MAX_HARTS, M_cli, M_sti
+    sscratch_write, which_cpu, M_cli, M_sti, Mode, SATP_mode, TrapFrame, MAX_HARTS,
 };
 use crate::ecall;
 use crate::ecall::S2Mop;
 use crate::error::{KError, KErrorType};
 use crate::kmem::{get_ksatp, get_page_table};
+use crate::ksemaphore::kt_semaphore;
 use crate::ktask::{ktask_extint, ktask_fallback};
+use crate::lock::{spin_mutex, S_lock};
 use crate::new_kerror;
 use crate::page::PAGE_SIZE;
 use crate::vm::{ident_range_map, mem_map, range_unmap, EntryBits, PageEntry, PageTable};
 use crate::zone::{kfree_page, kmalloc_page, zone_type};
 use crate::IRQ_BUFFER;
 use crate::KERNEL_TRAP_FRAME;
+use crate::KTHREAD_POOL;
 use crate::{M_UART, S_UART};
+use cbitmap::bitmap::*;
 use core::cell::UnsafeCell;
 use core::hash::*;
 use riscv::register::{mstatus, sstatus};
-use cbitmap::bitmap::*;
-use crate::lock::{spin_mutex, S_lock};
-use crate::KTHREAD_POOL;
-use crate::ksemaphore::kt_semaphore;
 
 #[derive(Clone, Copy)]
 pub enum task_state {
@@ -62,7 +62,7 @@ pub struct task_struct {
     cpu: usize,
     pid: usize,
     typ: task_typ,
-    flag: task_flag
+    flag: task_flag,
 }
 
 impl Drop for task_struct {
@@ -91,7 +91,7 @@ impl task_struct {
             exp_stack_base: 0 as usize,
             pid: 0 as usize,
             typ: task_typ::KERN_TASK,
-            flag: task_flag::NORMAL
+            flag: task_flag::NORMAL,
         }
     }
 
@@ -116,7 +116,6 @@ impl task_struct {
             self.pid = 0;
             //initialize kernel task
             unsafe {
-
                 let kt_stack = kmalloc_page(zone_type::ZONE_NORMAL, KTASK_STACK_SZ / PAGE_SIZE)?
                     .add(KTASK_STACK_SZ);
                 ident_range_map(
@@ -358,11 +357,11 @@ pub struct task_pool {
     next_task: [Option<usize>; MAX_HARTS],
     fallback_task: [Option<Box<task_struct>>; MAX_HARTS],
     crit_task_intstate: [usize; MAX_HARTS],
-    pidmap: Option<spin_mutex<Bitmap::<{(MAX_KTASK / 8) + 1}>, S_lock>>,
-    pub sems: [Option<Vec::<kt_semaphore>>; MAX_HARTS],
+    pidmap: Option<spin_mutex<Bitmap<{ (MAX_KTASK / 8) + 1 }>, S_lock>>,
+    pub sems: [Option<Vec<kt_semaphore>>; MAX_HARTS],
 }
 
-impl task_pool{
+impl task_pool {
     pub const fn new() -> Self {
         Self {
             POOL: [None, None, None, None],
@@ -393,22 +392,22 @@ impl task_pool{
         }
     }
 
-    fn get_new_pid(&mut self) -> usize{
+    fn get_new_pid(&mut self) -> usize {
         let bind = self.pidmap.as_mut().unwrap();
         let mut idmap = bind.lock();
         let newid = idmap.find_first_zero();
-        match newid{
+        match newid {
             Some(new_id) => {
                 idmap.set(new_id);
                 return new_id;
-            },
+            }
             None => {
                 panic!("Run out of task pid");
             }
         }
     }
 
-    fn reclaim_pid(&mut self, oldpid: usize){
+    fn reclaim_pid(&mut self, oldpid: usize) {
         let bind = self.pidmap.as_mut().unwrap();
         let mut idmap = bind.lock();
         idmap.set(oldpid);
@@ -498,7 +497,6 @@ impl task_pool{
         }
     }
 
-
     pub fn get_crit_task_mie(&self) -> &[usize; MAX_HARTS] {
         &self.crit_task_intstate
     }
@@ -506,9 +504,7 @@ impl task_pool{
     pub fn get_current_fg(&self, cpuid: usize) -> Result<task_flag, KError> {
         if let Some(cur_taskidx) = self.current_task[cpuid] {
             match self.POOL[cpuid] {
-                Some(ref taskvec) => {
-                    Ok(taskvec[cur_taskidx].flag)
-                }
+                Some(ref taskvec) => Ok(taskvec[cur_taskidx].flag),
                 None => {
                     return Err(new_kerror!(KErrorType::EINVAL));
                 }
@@ -521,9 +517,7 @@ impl task_pool{
     pub fn get_current_pid(&self, cpuid: usize) -> Result<usize, KError> {
         if let Some(cur_taskidx) = self.current_task[cpuid] {
             match self.POOL[cpuid] {
-                Some(ref taskvec) => {
-                    Ok(taskvec[cur_taskidx].pid)
-                }
+                Some(ref taskvec) => Ok(taskvec[cur_taskidx].pid),
                 None => {
                     return Err(new_kerror!(KErrorType::EINVAL));
                 }
@@ -590,7 +584,8 @@ impl task_pool{
     pub fn fallback(&mut self, cpuid: usize) -> Result<(), KError> {
         match self.fallback_task[cpuid] {
             Some(ref mut fallbacker) => {
-                if let Mode::Machine = get_cpu_mode(cpuid) {
+                let current_mode = get_cpu_mode(cpuid);
+                if matches!(current_mode, Mode::Machine | Mode::Machine_IRH) {
                     fallbacker.resume_from_M();
                     Ok(())
                 } else {
@@ -627,8 +622,8 @@ impl task_pool{
                         return Ok(());
                     }
 
-
-                    if let Mode::Machine = get_cpu_mode(cpuid) {
+                    let current_mode = get_cpu_mode(cpuid);
+                    if matches!(current_mode, Mode::Machine | Mode::Machine_IRH) {
                         if let task_flag::CRITICAL = taskvec[cur_taskidx].flag {
                             let prev_xie = M_cli();
                             self.crit_task_intstate[cpuid] = prev_xie;
@@ -653,8 +648,12 @@ impl task_pool{
     /*
      * Low efficiency, but correct
      */
-    pub fn set_state_by_pid(&mut self, target_pid: usize, new_state: task_state) -> Result<(), KError>{
-        for cpuid in 0..MAX_HARTS{
+    pub fn set_state_by_pid(
+        &mut self,
+        target_pid: usize,
+        new_state: task_state,
+    ) -> Result<(), KError> {
+        for cpuid in 0..MAX_HARTS {
             if let Some(ref mut taskvec) = self.POOL[cpuid] {
                 for task in taskvec.iter_mut() {
                     if task.pid == target_pid {
@@ -687,11 +686,8 @@ impl task_pool{
     //     let mut sem_vec = self.sems[cpuid].as_mut().unwrap();
     //     sem_vec[sem_idx].signal();
     // }
-
 }
 
 pub fn get_ktpid(cpuid: usize) -> Result<usize, KError> {
-    unsafe{
-        KTHREAD_POOL.get_current_pid(cpuid)
-    }
+    unsafe { KTHREAD_POOL.get_current_pid(cpuid) }
 }

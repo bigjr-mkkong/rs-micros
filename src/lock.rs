@@ -36,17 +36,32 @@ impl IntControl for S_lock {
     }
 }
 
-impl IntControl for Critical_Area{
-    fn cli() -> usize{
+impl IntControl for Critical_Area {
+    fn cli() -> usize {
         let cpuid = which_cpu();
-        //4 TEST REASON
         assert_eq!(cpuid, 0);
-        trapping(S2Mop::CLI, None);
-        0
+
+        let current_mode = get_cpu_mode(cpuid);
+
+        if matches!(current_mode, Mode::Machine | Mode::Machine_IRH) {
+            0
+        } else {
+            trapping(S2Mop::CLI, None);
+            0
+        }
     }
 
-    fn sti(prev_xie: usize){
-        trapping(S2Mop::STI, None);
+    fn sti(prev_xie: usize) {
+        let cpuid = which_cpu();
+        assert_eq!(cpuid, 0);
+
+        let current_mode = get_cpu_mode(cpuid);
+
+        if matches!(current_mode, Mode::Machine | Mode::Machine_IRH) {
+            ()
+        } else {
+            trapping(S2Mop::STI, None);
+        }
     }
 }
 

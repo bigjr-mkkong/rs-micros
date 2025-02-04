@@ -1,11 +1,12 @@
 use crate::cpu::{busy_delay, set_cpu_mode, M_cli, M_sti, Mode, TrapFrame};
 use crate::irq::{int_request, int_type};
 use crate::ktask::ktask_extint;
+use crate::kthread::{task_flag, task_pool, task_state, task_struct};
 use crate::plic;
-use crate::proc::{task_pool, task_state, task_struct, task_flag};
-use crate::KERNEL_TRAP_FRAME;
+use crate::sem_uart;
 use crate::EXTINT_SRCS;
 use crate::IRQ_BUFFER;
+use crate::KERNEL_TRAP_FRAME;
 use crate::KTHREAD_POOL;
 use crate::SECALL_FRAME;
 use crate::{ecall_args, S2Mop};
@@ -63,7 +64,7 @@ extern "C" fn m_trap(
     xstatus: usize,
     frame: &mut TrapFrame,
 ) -> usize {
-    set_cpu_mode(Mode::Machine, hart);
+    set_cpu_mode(Mode::Machine_IRH, hart);
     let mpp: Mode = mstatus::read().mpp().into();
 
     let is_async = if xcause >> 63 & 1 == 1 { true } else { false };
@@ -118,6 +119,7 @@ extern "C" fn m_trap(
                             new_irq_req.set_data(data);
 
                             IRQ_BUFFER.push_req(new_irq_req, hart);
+                            sem_uart.signal(Some(hart));
                         }
                     }
                 }
@@ -225,7 +227,7 @@ fn ecall_handler(pc_ret: usize, hart: usize) {
         match opcode {
             S2Mop::UNDEF => {
                 panic!("Supervisor is tring to call undefined operation");
-            },
+            }
             S2Mop::YIELD => {
                 if let Ok(task_flag::CRITICAL) = KTHREAD_POOL.get_current_fg(hart) {
                     let prev_mie = KTHREAD_POOL.get_crit_task_mie();
@@ -234,13 +236,17 @@ fn ecall_handler(pc_ret: usize, hart: usize) {
                 KTHREAD_POOL.save_from_ktrapframe(hart);
                 KTHREAD_POOL.set_currentPC(hart, pc_ret + 4);
                 KTHREAD_POOL.sched(hart);
-            },
+            }
             S2Mop::EXIT => {
                 KTHREAD_POOL.remove_cur_task(hart);
                 KTHREAD_POOL.sched(hart);
                 KTHREAD_POOL.fallback(hart);
-            },
+            }
             S2Mop::BLOCK => {
+                if let Ok(task_flag::CRITICAL) = KTHREAD_POOL.get_current_fg(hart) {
+                    let prev_mie = KTHREAD_POOL.get_crit_task_mie();
+                    M_sti(prev_mie[hart]);
+                }
                 let args = SECALL_FRAME[hart].get_args();
                 let target_pid = args[0];
 
@@ -250,7 +256,7 @@ fn ecall_handler(pc_ret: usize, hart: usize) {
                 KTHREAD_POOL.set_state_by_pid(target_pid, task_state::Block);
 
                 KTHREAD_POOL.sched(hart);
-            },
+            }
             S2Mop::UNBLOCK => {
                 let args = SECALL_FRAME[hart].get_args();
                 let target_pid = args[0];
@@ -259,11 +265,11 @@ fn ecall_handler(pc_ret: usize, hart: usize) {
                 KTHREAD_POOL.set_currentPC(hart, pc_ret + 4);
 
                 KTHREAD_POOL.set_state_by_pid(target_pid, task_state::Ready);
-            },
+            }
             S2Mop::CLI => {
                 let prev_mie = M_cli();
                 KERNEL_TRAP_FRAME[hart].mie_buf = prev_mie;
-            },
+            }
             S2Mop::STI => {
                 let prev_mie = KERNEL_TRAP_FRAME[hart].mie_buf;
                 M_sti(prev_mie);

@@ -1,7 +1,7 @@
 use crate::error::{KError, KErrorType};
-use crate::new_kerror;
-use crate::proc::{task_pool, task_state, task_struct, task_flag};
 use crate::ksemaphore::kt_semaphore;
+use crate::kthread::{task_flag, task_pool, task_state, task_struct};
+use crate::new_kerror;
 use crate::KTHREAD_POOL;
 
 impl task_pool {
@@ -23,29 +23,4 @@ impl task_struct {
     pub fn exit(&mut self) {
         self.set_state(task_state::Zombie);
     }
-}
-
-impl task_pool {
-    /*
-     * Return value: (cpuid, idx)
-     */
-    pub fn sem_init(&mut self, cpuid: usize, val: i32) -> (usize, usize) {
-        let new_sem = kt_semaphore::new(val);
-        match self.sems[cpuid] {
-            Some(ref mut semvec) => {
-                semvec.push(new_sem);
-                (cpuid, semvec.len()-1)
-            },
-            None => {
-                panic!("sem_init() failed");
-            }
-        }
-    }
-
-    pub fn wait(&mut self, (cpuid, idx): (usize, usize)) {
-        loop{
-            let mut bind = self.sems[cpuid].as_mut().unwrap().get_mut(idx);
-        }
-    }
-
 }

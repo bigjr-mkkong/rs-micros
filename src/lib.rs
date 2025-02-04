@@ -47,16 +47,15 @@ use cpu::{get_cpu_mode, which_cpu, SATP_mode, TrapFrame};
 use ecall::{ecall_args, S2Mop};
 use error::{KError, KErrorType};
 use irq::{int_request, soft_irq_buf};
-use ktask::{KHello_task0, KHello_task1, ktask_extint, ksem_test0};
+use ksemaphore::kt_semaphore;
+use ktask::{ksem_test0, ktask_extint, KHello_task0, KHello_task1};
+use kthread::{task_flag, task_pool, task_struct};
 use nobsp_kfunc::kinit as nobsp_kinit;
 use nobsp_kfunc::kmain as nobsp_kmain;
 use plic::{extint_name, extint_src, plic_controller, plic_ctx};
-use proc::{task_pool, task_struct, task_flag};
 use ringbuffer::AllocRingBuffer;
 use vm::{ident_range_map, virt2phys};
-use ksemaphore::kt_semaphore;
 use zone::{kfree_page, kmalloc_page, zone_type};
-
 
 #[no_mangle]
 extern "C" fn eh_personality() {}
@@ -193,7 +192,7 @@ pub static mut IRQ_BUFFER: soft_irq_buf = soft_irq_buf::new();
 /*
  * TODO: Debug semaphore implementation
  */
-pub static mut sem_test: kt_semaphore = kt_semaphore::new(0);
+pub static mut sem_uart: kt_semaphore = kt_semaphore::new(0);
 
 #[global_allocator]
 pub static glob_alloc: allocator::kheap_alloc = allocator::kheap_alloc::new();
@@ -436,7 +435,6 @@ fn kinit() -> Result<usize, KError> {
 
     unsafe {
         KTHREAD_POOL.init(cpu::MAX_HARTS);
-
     }
     /*
      * Unlock other cores from early spin lock
@@ -469,7 +467,6 @@ fn kmain(current_cpu: usize) -> Result<(), KError> {
         IRQ_BUFFER.init();
     }
 
-
     Sprintln!("---------->>Start Process<<----------");
     unsafe {
         // let mut pcb_khello: task_struct = task_struct::new();
@@ -478,7 +475,7 @@ fn kmain(current_cpu: usize) -> Result<(), KError> {
 
         // KTHREAD_POOL.spawn(KHello_task0 as usize, task_flag::NORMAL, sched_cpu)?;
         KTHREAD_POOL.spawn(KHello_task1 as usize, task_flag::NORMAL, sched_cpu)?;
-        KTHREAD_POOL.spawn(ksem_test0 as usize, task_flag::NORMAL, sched_cpu)?;
+        // KTHREAD_POOL.spawn(ksem_test0 as usize, task_flag::NORMAL, sched_cpu)?;
         KTHREAD_POOL.spawn(ktask_extint as usize, task_flag::CRITICAL, sched_cpu)?;
         KTHREAD_POOL.join_all_ktask(sched_cpu);
     }
@@ -499,15 +496,15 @@ pub mod ecall;
 pub mod error;
 pub mod irq;
 pub mod kmem;
+pub mod ksemaphore;
 pub mod ktask;
 pub mod ktask_manager;
+pub mod kthread;
 pub mod lock;
 pub mod nobsp_kfunc;
 pub mod page;
 pub mod plic;
-pub mod proc;
 pub mod trap;
 pub mod uart;
 pub mod vm;
 pub mod zone;
-pub mod ksemaphore;

@@ -217,7 +217,8 @@ impl plic_controller {
 }
 
 pub fn id2plic_ctx(hartid: usize) -> plic_ctx {
-    if let Mode::Machine = get_cpu_mode(hartid) {
+    let current_mode = get_cpu_mode(hartid);
+    if matches!(current_mode, Mode::Machine | Mode::Machine_IRH) {
         match hartid {
             0 => plic_ctx::CORE0_M,
             1 => plic_ctx::CORE1_M,

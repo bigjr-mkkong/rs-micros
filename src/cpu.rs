@@ -9,6 +9,7 @@ pub const MAX_HARTS: usize = 4;
 #[derive(Clone, Copy)]
 pub enum Mode {
     Machine,
+    Machine_IRH,
     Supervisor,
     User,
 }
@@ -51,7 +52,7 @@ pub struct TrapFrame {
     pub hartid: usize,
     pub cur_mode: Mode,
     pub cpuid: usize,
-    pub mie_buf: usize
+    pub mie_buf: usize,
 }
 
 impl TrapFrame {
@@ -64,7 +65,7 @@ impl TrapFrame {
             hartid: 0,
             cur_mode: Mode::Machine,
             cpuid: 0,
-            mie_buf: 0
+            mie_buf: 0,
         }
     }
 
