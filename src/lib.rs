@@ -9,6 +9,7 @@
 extern crate alloc;
 
 extern "C" {
+    static mut fdt_base: usize;
     static _heap_start: u8;
     static _heap_end: u8;
 
@@ -56,6 +57,7 @@ use plic::{extint_name, extint_src, plic_controller, plic_ctx};
 use ringbuffer::AllocRingBuffer;
 use vm::{ident_range_map, virt2phys};
 use zone::{kfree_page, kmalloc_page, zone_type};
+use fdt_parser::Fdt;
 
 #[no_mangle]
 extern "C" fn eh_personality() {}
@@ -201,12 +203,14 @@ pub static mut EXTINT_SRCS: [extint_src; plic::MAX_INTCNT] = [extint_src::new();
 
 pub static mut KTHREAD_POOL: task_pool = task_pool::new();
 
+
 fn kinit() -> Result<usize, KError> {
     M_UART.lock().init();
     Mprintln!("\nHello world");
 
     let current_cpu = cpu::mhartid_read();
     Mprintln!("Initializer running on CPU#{}", current_cpu);
+
 
     /*
      * Setting up new zone
@@ -344,6 +348,34 @@ fn kinit() -> Result<usize, KError> {
 
     Mprintln!("VM Walker test: Paddr: {:#x} -> Vaddr: {:#x}", paddr, vaddr);
 
+    unsafe{
+        let mut fdt_addr = ptr::NonNull::new(fdt_base as *mut u8).unwrap();
+
+        match Fdt::from_ptr(fdt_addr) {
+            Ok(fdt_table) => {
+                Mprintln!("FDT version: {}", fdt_table.version());
+                for region in fdt_table.memory_reservation_block() {
+                    Mprintln!("region: {:?}", region);
+                }
+
+                for node in fdt_table.all_nodes() {
+                    let space = " ".repeat((node.level - 1) * 4);
+                    Mprintln!("{}{}", space, node.name());
+
+                    if let Some(reg) = node.reg() {
+                        Mprintln!("{} - reg: ", space);
+                        for cell in reg {
+                            Mprintln!("{}     {:?}", space, cell);
+                        }
+                    }
+                }
+            }
+            Err(errmsg) => {
+                panic!("fdt parser failed: {:?}", errmsg);
+            }
+        }
+
+    }
     /*
      * Memory allocation for trap stack
      */

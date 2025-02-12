@@ -316,3 +316,15 @@ impl page_allocator for empty_allocator {
         Err(new_kerror!(KErrorType::ENOSYS))
     }
 }
+
+pub enum page_flag{
+    DIRTY,
+    LOCKED,
+    DEFAULT,
+}
+
+pub struct page{
+    pfn: usize,
+    refcnt: usize,
+    flag: page_flag,
+}

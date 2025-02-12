@@ -431,7 +431,7 @@ impl task_pool {
             .as_ref()
             .expect("Failed to take reference of task queue");
         match self.next_task[cpuid] {
-            Some(ref mut next_ent) => loop {
+            Some(ref mut next_ent) => 'state_check: loop{
                 let tmp = *next_ent;
                 let taskqlen = taskq.len();
 
@@ -441,13 +441,14 @@ impl task_pool {
                 } else {
                     *next_ent = (tmp + 1) % taskq.len();
                     if let Some(ref taskvec) = self.POOL[cpuid] {
-                        match taskvec[*next_ent].get_state() {
+                        let next_state = taskvec[*next_ent].get_state();
+                        match next_state{
                             task_state::Ready => {
-                                break;
-                            }
+                                break 'state_check;
+                            },
                             task_state::Running => {
-                                break;
-                            }
+                                break 'state_check;
+                            },
                             _ => {}
                         }
                     } else {

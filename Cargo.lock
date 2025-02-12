@@ -27,6 +27,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "361a90feb7004eca4019fb28352a9465666b24f840f5c3cddf0ff13920590b89"
 
 [[package]]
+name = "fdt-parser"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0deb230715aa771c49f2eda04e5532a34acccbf31335885d9bd4e3cebee8dac0"
+
+[[package]]
 name = "lock_api"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -57,6 +63,7 @@ name = "rs-micros"
 version = "0.1.0"
 dependencies = [
  "cbitmap",
+ "fdt-parser",
  "ringbuffer",
  "riscv",
  "spin",

@@ -6,14 +6,14 @@
 cpu_early_block:    
     .dword      (1 << BSP)
 
-.global dtb_base
-dtb_base:
+.global fdt_base
+fdt_base:
     .dword      0
 
 .section .text.init
 .global _start
 _start:
-    la      t0, dtb_base
+    la      t0, fdt_base
     sd      a1, (t0)
 	csrw	satp, zero
 	csrr	t0, mhartid
