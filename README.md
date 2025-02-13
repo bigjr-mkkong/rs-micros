@@ -42,8 +42,8 @@ To hang qemu before receive gdb client connection
   - [x] Basic kthread sync primitives`(spawn(), join_all(), exit())`
   - [x] soft irq
   - [x] kthread semaphore
-  - [Working...] ksemaphore stress test
-  - [ ] User task
+  - [x] ksemaphore stress test
+  - [Working...] User task
   - [ ] User syscall
 
   **. . .**
