@@ -47,6 +47,7 @@ use clint::clint_controller;
 use cpu::{get_cpu_mode, which_cpu, SATP_mode, TrapFrame};
 use ecall::{ecall_args, S2Mop};
 use error::{KError, KErrorType};
+use fdt_parser::Fdt;
 use irq::{int_request, soft_irq_buf};
 use ksemaphore::kt_semaphore;
 use ktask::{ksem_test0, ktask_extint, KHello_task0, KHello_task1};
@@ -57,7 +58,6 @@ use plic::{extint_name, extint_src, plic_controller, plic_ctx};
 use ringbuffer::AllocRingBuffer;
 use vm::{ident_range_map, virt2phys};
 use zone::{kfree_page, kmalloc_page, zone_type};
-use fdt_parser::Fdt;
 
 #[no_mangle]
 extern "C" fn eh_personality() {}
@@ -203,7 +203,6 @@ pub static mut EXTINT_SRCS: [extint_src; plic::MAX_INTCNT] = [extint_src::new();
 
 pub static mut KTHREAD_POOL: task_pool = task_pool::new();
 
-
 fn kinit() -> Result<usize, KError> {
     M_UART.lock().init();
     Mprintln!("\nHello world");
@@ -211,13 +210,14 @@ fn kinit() -> Result<usize, KError> {
     let current_cpu = cpu::mhartid_read();
     Mprintln!("Initializer running on CPU#{}", current_cpu);
 
-
     /*
      * Setting up new zone
      */
     let (meta_begin, meta_end) = SYS_ZONES[zone_type::ZONE_NORMAL.val()].lock().init(
         ptr::addr_of!(_heap_start),
-        ptr::addr_of!(_heap_end),
+        unsafe {
+            ptr::addr_of!(_heap_end).sub(0x100_0000) //prevent enter fdt area
+        },
         zone_type::ZONE_NORMAL,
         zone::AllocatorSelector::NaiveAllocator,
     )?;
@@ -348,7 +348,7 @@ fn kinit() -> Result<usize, KError> {
 
     Mprintln!("VM Walker test: Paddr: {:#x} -> Vaddr: {:#x}", paddr, vaddr);
 
-    unsafe{
+    unsafe {
         let mut fdt_addr = ptr::NonNull::new(fdt_base as *mut u8).unwrap();
 
         match Fdt::from_ptr(fdt_addr) {
@@ -362,11 +362,25 @@ fn kinit() -> Result<usize, KError> {
                     let space = " ".repeat((node.level - 1) * 4);
                     Mprintln!("{}{}", space, node.name());
 
+                    Mprintln!("{} -compatible: ", space);
+                    for cap in node.compatibles() {
+                        Mprintln!("{}     {:?}", space, cap);
+                    }
+
                     if let Some(reg) = node.reg() {
                         Mprintln!("{} - reg: ", space);
                         for cell in reg {
                             Mprintln!("{}     {:?}", space, cell);
                         }
+                    }
+
+                    for prop in node.propertys() {
+                        Mprintln!(
+                            "{}   Property: {} = {:?}",
+                            space,
+                            prop.name,
+                            prop.raw_value()
+                        );
                     }
                 }
             }
@@ -374,7 +388,6 @@ fn kinit() -> Result<usize, KError> {
                 panic!("fdt parser failed: {:?}", errmsg);
             }
         }
-
     }
     /*
      * Memory allocation for trap stack

@@ -57,5 +57,6 @@ There are many TODOs in src code, but here are some general things:
   - [x] Slub(or any kinds of small object allocator) allocator for kheap
   - [x] Kernel threads
   - [ ] I am really interested on the idea of embed HW-malloc(like FALAFEL?) into this OS, and I already implemented a really nice-looking FFI between rust and C(which is the main reason of why I use C implemented small object allocator). I think it's not hard to just hookup allocator into this OS, but it may tooks a lot of time to fix compatibility issues depends on different kinds of dev boards.
-  - [ ] Dev-tree parser
+  - [x] Dev-tree parser
+  - [ ] Cross-platform interrupt based on device tree information
   - [x] High-intensity interrupt in a short amount of time will overflow kernel heap and cause UB on whole system. I need to implement kthread semaphore to solve this problem.

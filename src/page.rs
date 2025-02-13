@@ -317,13 +317,13 @@ impl page_allocator for empty_allocator {
     }
 }
 
-pub enum page_flag{
+pub enum page_flag {
     DIRTY,
     LOCKED,
     DEFAULT,
 }
 
-pub struct page{
+pub struct page {
     pfn: usize,
     refcnt: usize,
     flag: page_flag,
