@@ -57,7 +57,7 @@ use nobsp_kfunc::kmain as nobsp_kmain;
 use plic::{extint_name, extint_src, plic_controller, plic_ctx};
 use ringbuffer::AllocRingBuffer;
 use vm::{ident_range_map, virt2phys};
-use zone::{kfree_raw_page, kmalloc_raw_page, zone_type};
+use zone::{kfree_page, kmalloc_page, zone_type};
 
 #[no_mangle]
 extern "C" fn eh_personality() {}
@@ -397,7 +397,7 @@ fn kinit() -> Result<usize, KError> {
             KERNEL_TRAP_FRAME[cpu_cnt].cpuid = cpu_cnt;
 
             KERNEL_TRAP_FRAME[cpu_cnt].trap_stack =
-                kmalloc_raw_page(zone_type::ZONE_NORMAL, 2)?.add(page::PAGE_SIZE * 2);
+                kmalloc_page(zone_type::ZONE_NORMAL, 2)?.add(page::PAGE_SIZE * 2);
 
             ident_range_map(
                 pageroot,

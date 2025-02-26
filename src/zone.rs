@@ -165,20 +165,10 @@ impl mem_zone {
     }
 }
 
-pub fn kmalloc_raw_page(ztype: zone_type, pg_cnt: usize) -> Result<*mut u8, KError> {
+pub fn kmalloc_page(ztype: zone_type, pg_cnt: usize) -> Result<*mut u8, KError> {
     SYS_ZONES[ztype.val()].lock().alloc_pages(pg_cnt)
 }
 
-pub fn kfree_raw_page(ztype: zone_type, addr: *mut u8) -> Result<(), KError> {
-    SYS_ZONES[ztype.val()].lock().free_pages(addr)
-}
-
-pub fn kmalloc_page(ztype: zone_type, pg_cnt: usize) -> Result<*mut u8, KError> {
-    let new_page = kmalloc_raw_page(zone_type::ZONE_NORMAL, pg_cnt);
-    todo!("Need to record page info");
-}
-
 pub fn kfree_page(ztype: zone_type, addr: *mut u8) -> Result<(), KError> {
-    todo!("Need to release page info");
-    kfree_raw_page(zone_type::ZONE_NORMAL, addr)
+    SYS_ZONES[ztype.val()].lock().free_pages(addr)
 }

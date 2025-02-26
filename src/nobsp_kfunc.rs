@@ -13,7 +13,7 @@ use crate::lock::{M_lock, S_lock};
 use crate::page;
 use crate::plic::{extint_name, extint_src, plic_controller, plic_ctx};
 use crate::vm::{ident_range_map, virt2phys};
-use crate::zone::{kfree_raw_page, kmalloc_raw_page, zone_type};
+use crate::zone::{kfree_page, kmalloc_page, zone_type};
 use crate::CLINT;
 use crate::KTHREAD_POOL;
 
