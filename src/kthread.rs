@@ -15,7 +15,7 @@ use crate::lock::{spin_mutex, S_lock};
 use crate::new_kerror;
 use crate::page::PAGE_SIZE;
 use crate::vm::{ident_range_map, mem_map, range_unmap, EntryBits, PageEntry, PageTable};
-use crate::zone::{kfree_page, kmalloc_page, zone_type};
+use crate::zone::{kfree_raw_page, kmalloc_raw_page, zone_type};
 use crate::IRQ_BUFFER;
 use crate::KERNEL_TRAP_FRAME;
 use crate::KTHREAD_POOL;
@@ -75,11 +75,11 @@ impl Drop for task_struct {
         let mut pageroot = unsafe { pageroot_ptr.as_mut().unwrap() };
 
         let kt_stack_begin: *mut u8 = (self.stack_base - KTASK_STACK_SZ) as *mut u8;
-        kfree_page(zone_type::ZONE_NORMAL, kt_stack_begin);
+        kfree_raw_page(zone_type::ZONE_NORMAL, kt_stack_begin);
         range_unmap(pageroot, kt_stack_begin as usize, self.stack_base);
 
         let exp_stack_begin: *mut u8 = (self.exp_stack_base - KTASK_EXPSTACK_SZ) as *mut u8;
-        kfree_page(zone_type::ZONE_NORMAL, exp_stack_begin);
+        kfree_raw_page(zone_type::ZONE_NORMAL, exp_stack_begin);
         range_unmap(pageroot, exp_stack_begin as usize, self.exp_stack_base);
     }
 }
@@ -128,7 +128,7 @@ impl task_struct {
             self.pid = 0;
             //initialize kernel task
             unsafe {
-                let kt_stack = kmalloc_page(zone_type::ZONE_NORMAL, KTASK_STACK_SZ / PAGE_SIZE)?
+                let kt_stack = kmalloc_raw_page(zone_type::ZONE_NORMAL, KTASK_STACK_SZ / PAGE_SIZE)?
                     .add(KTASK_STACK_SZ);
                 ident_range_map(
                     pageroot,
@@ -138,7 +138,7 @@ impl task_struct {
                 );
 
                 let kt_expstack =
-                    kmalloc_page(zone_type::ZONE_NORMAL, KTASK_EXPSTACK_SZ / PAGE_SIZE)?
+                    kmalloc_raw_page(zone_type::ZONE_NORMAL, KTASK_EXPSTACK_SZ / PAGE_SIZE)?
                         .add(KTASK_EXPSTACK_SZ);
                 ident_range_map(
                     pageroot,
@@ -155,7 +155,7 @@ impl task_struct {
             }
         } else {
             //initialize user task
-            let pg_root_ptr = kmalloc_page(zone_type::ZONE_NORMAL, 1)? as *mut PageTable;
+            let pg_root_ptr = kmalloc_raw_page(zone_type::ZONE_NORMAL, 1)? as *mut PageTable;
             let pg_root = unsafe { pg_root_ptr.as_mut().unwrap() };
 
             let satp_root = pg_root_ptr as usize;
@@ -165,7 +165,7 @@ impl task_struct {
                 self.pc = func;
 
                 // allocate trap stack
-                let trap_stack = kmalloc_page(zone_type::ZONE_NORMAL, 2)?.add(PAGE_SIZE * 2);
+                let trap_stack = kmalloc_raw_page(zone_type::ZONE_NORMAL, 2)?.add(PAGE_SIZE * 2);
                 ident_range_map(
                     pg_root,
                     trap_stack.sub(2 * PAGE_SIZE) as usize,
@@ -174,7 +174,7 @@ impl task_struct {
                 );
 
                 //allocate text segment
-                let text_mem = kmalloc_page(zone_type::ZONE_NORMAL, 1)? as *mut usize;
+                let text_mem = kmalloc_raw_page(zone_type::ZONE_NORMAL, 1)? as *mut usize;
                 let prog_begin = self.pc as *mut usize;
                 prog_begin.copy_to_nonoverlapping(text_mem, 3);
                 mem_map(
@@ -186,7 +186,7 @@ impl task_struct {
                 );
 
                 //allocate execution stack
-                let exe_stack = kmalloc_page(zone_type::ZONE_NORMAL, 1)?.add(PAGE_SIZE * 1);
+                let exe_stack = kmalloc_raw_page(zone_type::ZONE_NORMAL, 1)?.add(PAGE_SIZE * 1);
                 ident_range_map(
                     pg_root,
                     exe_stack.sub(1 * PAGE_SIZE) as usize,

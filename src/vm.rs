@@ -2,7 +2,7 @@ use crate::cpu::flush_tlb;
 use crate::error::{KError, KErrorType};
 use crate::new_kerror;
 use crate::page;
-use crate::zone::{kfree_page, kmalloc_page, zone_type};
+use crate::zone::{kfree_raw_page, kmalloc_raw_page, zone_type};
 use crate::{aligh_4k, aligl_4k};
 use crate::{M_UART, S_UART};
 
@@ -108,7 +108,7 @@ pub fn mem_map(
 
     for i in (level..2).rev() {
         if !v.is_valid() {
-            let page = kmalloc_page(zone_type::ZONE_NORMAL, 1)?;
+            let page = kmalloc_raw_page(zone_type::ZONE_NORMAL, 1)?;
 
             v.set_entry(((page as i64) >> 2) | EntryBits::Valid.val());
         }

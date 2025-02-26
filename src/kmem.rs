@@ -1,6 +1,6 @@
 use crate::error::{KError, KErrorType};
 use crate::vm::PageTable;
-use crate::zone::{kfree_page, kmalloc_page, zone_type};
+use crate::zone::{kfree_raw_page, kmalloc_raw_page, zone_type};
 
 static mut KHEAP_START: *mut u8 = 0 as *mut u8;
 static mut KHEAP_PGCNT: usize = 256;
@@ -9,8 +9,8 @@ static mut KERN_SATP: u64 = 0;
 
 pub fn init() -> Result<(), KError> {
     unsafe {
-        KHEAP_START = kmalloc_page(zone_type::ZONE_NORMAL, KHEAP_PGCNT)?;
-        KMEM_PAGE_TABLE = kmalloc_page(zone_type::ZONE_NORMAL, 1)? as *mut PageTable;
+        KHEAP_START = kmalloc_raw_page(zone_type::ZONE_NORMAL, KHEAP_PGCNT)?;
+        KMEM_PAGE_TABLE = kmalloc_raw_page(zone_type::ZONE_NORMAL, 1)? as *mut PageTable;
     }
 
     Ok(())

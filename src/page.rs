@@ -5,6 +5,8 @@ use core::ptr;
 use crate::zone;
 use crate::zone::page_allocator;
 use crate::{M_UART, S_UART};
+use crate::lock::{spin_mutex, S_lock};
+use crate::alloc::collections::BTreeMap;
 // use crate::sys_uart;
 
 use crate::error::{KError, KErrorType};
@@ -36,8 +38,8 @@ struct PageMark {
 }
 
 struct PageRec {
-    begin: *const u8,
-    pg_off: usize,
+    begin: *const u8,   //page begin address
+    pg_off: usize,      //page id(from 0 to last page)
     len: usize,
     inuse: bool,
 }
@@ -317,14 +319,42 @@ impl page_allocator for empty_allocator {
     }
 }
 
+#[derive(Clone, Copy)]
 pub enum page_flag {
     DIRTY,
     LOCKED,
     DEFAULT,
 }
 
-pub struct page {
+#[derive(Clone, Copy)]
+pub struct Page_t {
     pfn: usize,
     refcnt: usize,
     flag: page_flag,
+}
+
+pub struct page_info_man{
+    pg_tree: Option<spin_mutex<BTreeMap<usize, Page_t>, S_lock>>
+}
+
+impl page_info_man{
+    pub const fn new() -> Self{
+        Self{
+            pg_tree: None
+        }
+    }
+
+    pub fn init(&mut self) {
+        self.pg_tree = Some(spin_mutex::new(BTreeMap::<usize, Page_t>::new()))
+    }
+
+    pub fn add_newpg(&mut self, newpg: &Page_t) -> Result<(), KError> {
+        if let Some(ref mut rectree) = self.pg_tree {
+            rectree.lock().insert(newpg.pfn, *newpg);
+            Ok(())
+        }else{
+            Err(new_kerror!(KErrorType::EFAULT))
+        }
+    }
+
 }
