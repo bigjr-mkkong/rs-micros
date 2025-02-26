@@ -9,6 +9,14 @@ static mut KERN_SATP: u64 = 0;
 
 pub fn init() -> Result<(), KError> {
     unsafe {
+        /*
+         * KHEAP_START are been allocated before settle down of kheap
+         * which means there's no way to insert pageinfo into pagetree
+         * I may need to insert it after, which means i need to pass
+         * out the page range from this kmalloc_page. A good solution
+         * may be kmalloc_page check if pagetree is None. It doesn't
+         * mess with it if it is None, otherwise it insert information
+         */
         KHEAP_START = kmalloc_page(zone_type::ZONE_NORMAL, KHEAP_PGCNT)?;
         KMEM_PAGE_TABLE = kmalloc_page(zone_type::ZONE_NORMAL, 1)? as *mut PageTable;
     }

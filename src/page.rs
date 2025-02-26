@@ -5,7 +5,7 @@ use core::ptr;
 use crate::zone;
 use crate::zone::page_allocator;
 use crate::{M_UART, S_UART};
-// use crate::sys_uart;
+use crate::alloc::collections::BTreeMap;
 
 use crate::error::{KError, KErrorType};
 use crate::new_kerror;
@@ -26,26 +26,54 @@ macro_rules! aligl_4k {
     };
 }
 
-enum PageFlags {
+#[macro_export]
+macro_rules! addr2pfn {
+    ($addr:expr) => {
+        ($addr / PAGE_SIZE)
+    };
+}
+
+/*
+ * pgalloc_flags, pgalloc_mark, and pgalloc_rec keeps all *allocator specific info* which help
+ * allocator to track the allocation
+ *
+ * PageFlags and Page Rec control the *page specific info* which help memory system to figure out
+ * page state for each page(locate by pfn)
+ *
+ * They are independent from each other
+ */
+enum pgalloc_flags {
     PF_FREE = (1 << 0),
     PF_TAKEN = (1 << 1),
 }
 
-struct PageMark {
-    flags: PageFlags,
+struct pgalloc_mark {
+    flags: pgalloc_flags,
 }
 
-struct PageRec {
+struct pgalloc_rec {
     begin: *const u8,
     pg_off: usize,
     len: usize,
     inuse: bool,
 }
 
+#[derive(Clone, Copy)]
+pub enum PageFlags {
+    DIRTY,
+    LOCKED,
+    DEFAULT,
+}
+
+#[derive(Clone, Copy)]
+pub struct PageRec {
+    pfn: usize,
+    refcnt: usize,
+    flag: PageFlags,
+}
 /*
  * naive_allocator needs at least 4 Pages memory to works
  */
-#[derive(Default, Clone, Copy)]
 pub struct naive_allocator {
     tot_page: usize,
     zone_begin: usize,
@@ -56,6 +84,7 @@ pub struct naive_allocator {
     mem_end: usize,
     rec_begin: usize,
     rec_size: usize,
+    pagetree: Option<BTreeMap<usize, PageRec>>
 }
 
 impl page_allocator for naive_allocator {
@@ -71,8 +100,8 @@ impl page_allocator for naive_allocator {
             return Err(new_kerror!(KErrorType::ENOMEM));
         }
 
-        let pmark_sz = mem::size_of::<PageMark>();
-        let prec_sz = mem::size_of::<PageRec>();
+        let pmark_sz = mem::size_of::<pgalloc_mark>();
+        let prec_sz = mem::size_of::<pgalloc_rec>();
 
         self.zone_begin = zone_start;
         self.zone_end = zone_end;
@@ -89,14 +118,14 @@ impl page_allocator for naive_allocator {
         self.tot_page = (self.mem_end - self.mem_begin) / PAGE_SIZE;
 
         let map_elecnt = self.map_size / pmark_sz;
-        let rawpt_mapbegin = self.map_begin as *mut PageMark;
-        let rawpt_recbegin = self.rec_begin as *mut PageRec;
+        let rawpt_mapbegin = self.map_begin as *mut pgalloc_mark;
+        let rawpt_recbegin = self.rec_begin as *mut pgalloc_rec;
         let rawpt_membegin = self.mem_begin as *const u8;
 
         for i in 0..map_elecnt {
             unsafe {
-                rawpt_mapbegin.add(i).write(PageMark {
-                    flags: PageFlags::PF_FREE,
+                rawpt_mapbegin.add(i).write(pgalloc_mark {
+                    flags: pgalloc_flags::PF_FREE,
                 })
             }
         }
@@ -105,7 +134,7 @@ impl page_allocator for naive_allocator {
 
         for i in 0..rec_elecnt {
             unsafe {
-                rawpt_recbegin.add(i).write(PageRec {
+                rawpt_recbegin.add(i).write(pgalloc_rec {
                     begin: 0 as *const u8,
                     pg_off: 0,
                     len: 0,
@@ -128,6 +157,15 @@ impl page_allocator for naive_allocator {
                     if res == true {
                         self.map_mark_taken(i, pg_cnt);
                         alloc_addr = self.rec_add(i, pg_cnt)?;
+
+                        if let Some(_) = self.pagetree {
+                            self.pagetree_update(&PageRec{
+                                pfn: addr2pfn!(alloc_addr as usize),
+                                refcnt: 1,
+                                flag: PageFlags::DEFAULT,
+                            });
+                        }
+
                         return Ok(alloc_addr as *mut u8);
                     } else {
                         continue;
@@ -145,7 +183,7 @@ impl page_allocator for naive_allocator {
     fn free_pages(&mut self, addr: *mut u8) -> Result<(), KError> {
         // Mprintln!("Start reclaiming...");
         let mut rec_arr = unsafe {
-            core::slice::from_raw_parts_mut(self.rec_begin as *mut PageRec, self.rec_size)
+            core::slice::from_raw_parts_mut(self.rec_begin as *mut pgalloc_rec, self.rec_size)
         };
 
         let mut free_begin_pgnum: usize;
@@ -157,6 +195,7 @@ impl page_allocator for naive_allocator {
 
         Ok(())
     }
+
 }
 
 impl naive_allocator {
@@ -171,6 +210,7 @@ impl naive_allocator {
             rec_size: 0,
             mem_begin: 0,
             mem_end: 0,
+            pagetree: None
         }
     }
     fn print_info(&self) {
@@ -198,13 +238,13 @@ impl naive_allocator {
         if map_off + thres_pg > self.tot_page {
             return Err(new_kerror!(KErrorType::ENOMEM));
         }
-        let rawpt_mapbegin = self.map_begin as *mut PageMark;
+        let rawpt_mapbegin = self.map_begin as *mut pgalloc_mark;
 
         let map_arr =
             unsafe { core::slice::from_raw_parts(rawpt_mapbegin.add(map_off), self.tot_page) };
 
         for (reg_cnt, reg) in map_arr.iter().enumerate() {
-            if let PageFlags::PF_TAKEN = reg.flags {
+            if let pgalloc_flags::PF_TAKEN = reg.flags {
                 return Ok(false);
             }
         }
@@ -213,24 +253,24 @@ impl naive_allocator {
     }
 
     fn map_mark_taken(&mut self, map_off: usize, page_cnt: usize) {
-        let mut mark_begin = self.map_begin as *mut PageMark;
+        let mut mark_begin = self.map_begin as *mut pgalloc_mark;
         mark_begin = mark_begin.wrapping_offset(map_off as isize);
         for i in 0..page_cnt {
             unsafe {
-                mark_begin.add(i).write(PageMark {
-                    flags: PageFlags::PF_TAKEN,
+                mark_begin.add(i).write(pgalloc_mark {
+                    flags: pgalloc_flags::PF_TAKEN,
                 })
             }
         }
     }
 
     fn map_mark_free(&mut self, map_off: usize, page_cnt: usize) {
-        let mut mark_begin = self.map_begin as *mut PageMark;
+        let mut mark_begin = self.map_begin as *mut pgalloc_mark;
         mark_begin = mark_begin.wrapping_offset(map_off as isize);
         for i in 0..page_cnt {
             unsafe {
-                mark_begin.add(i).write(PageMark {
-                    flags: PageFlags::PF_FREE,
+                mark_begin.add(i).write(pgalloc_mark {
+                    flags: pgalloc_flags::PF_FREE,
                 })
             }
         }
@@ -240,14 +280,14 @@ impl naive_allocator {
         let mut rec_arr;
         unsafe {
             rec_arr =
-                core::slice::from_raw_parts_mut(self.rec_begin as *mut PageRec, self.rec_size);
+                core::slice::from_raw_parts_mut(self.rec_begin as *mut pgalloc_rec, self.rec_size);
         }
 
         let rawpt_membegin = self.mem_begin as *mut u8;
         for (rec_cnt, rec) in rec_arr.iter_mut().enumerate() {
             let addr = rawpt_membegin.wrapping_byte_offset((map_off * PAGE_SIZE) as isize);
             if rec.inuse == false {
-                *rec = PageRec {
+                *rec = pgalloc_rec {
                     begin: addr,
                     pg_off: map_off,
                     len: page_cnt,
@@ -264,7 +304,7 @@ impl naive_allocator {
         let mut free_begin_pgnum: usize = 0;
         let mut free_pgnum: usize = 0;
         let mut found: bool = false;
-        let rawpt_recbegin = self.rec_begin as *mut PageRec;
+        let rawpt_recbegin = self.rec_begin as *mut pgalloc_rec;
 
         let rec_arr = unsafe { core::slice::from_raw_parts_mut(rawpt_recbegin, self.tot_page) };
         for (rec_cnt, rec) in rec_arr.iter_mut().enumerate() {
@@ -282,6 +322,29 @@ impl naive_allocator {
             return Ok((free_begin_pgnum, free_pgnum));
         } else {
             return Err(new_kerror!(KErrorType::EFAULT));
+        }
+    }
+
+    fn pagetree_update(&mut self, newpg: &PageRec) -> Result<(), KError>{
+        match self.pagetree {
+            Some(ref mut pgtree) => {
+                pgtree.insert(newpg.pfn, *newpg).unwrap();
+                Ok(())
+            },
+            None => {
+                Err(new_kerror!(KErrorType::EFAULT))
+            }
+        }
+    }
+
+    fn pagetree_remove(&mut self, pfn: usize) -> Result<(usize, PageRec), KError>{
+        match self.pagetree {
+            Some(ref mut pgtree) => {
+                Ok(pgtree.remove_entry(&pfn).unwrap())
+            },
+            None => {
+                Err(new_kerror!(KErrorType::EFAULT))
+            }
         }
     }
 }
@@ -317,14 +380,3 @@ impl page_allocator for empty_allocator {
     }
 }
 
-pub enum page_flag {
-    DIRTY,
-    LOCKED,
-    DEFAULT,
-}
-
-pub struct page {
-    pfn: usize,
-    refcnt: usize,
-    flag: page_flag,
-}

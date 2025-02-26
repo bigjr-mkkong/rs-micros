@@ -8,13 +8,11 @@ use crate::{M_UART, S_UART};
 
 use crate::page::{empty_allocator, naive_allocator};
 
-#[derive(Clone, Copy)]
 pub enum AllocatorSelector {
     EmptyAllocator,
     NaiveAllocator,
 }
 
-#[derive(Clone, Copy)]
 pub enum Allocators {
     EmptyAllocator(empty_allocator),
     NaiveAllocator(naive_allocator),
@@ -87,7 +85,6 @@ pub trait page_allocator {
     fn free_pages(&mut self, addr: *mut u8) -> Result<(), KError>;
 }
 
-#[derive(Clone, Copy)]
 pub struct mem_zone {
     begin_addr: usize,
     end_addr: usize,
@@ -149,7 +146,7 @@ impl mem_zone {
     }
 
     pub fn alloc_pages(&mut self, pg_cnt: usize) -> Result<*mut u8, KError> {
-        if let Some(mut alloc) = self.pg_allocator {
+        if let Some(ref mut alloc) = self.pg_allocator {
             alloc.alloc_pages(pg_cnt)
         } else {
             Err(new_kerror!(KErrorType::ENOSYS))
@@ -157,7 +154,7 @@ impl mem_zone {
     }
 
     pub fn free_pages(&mut self, addr: *mut u8) -> Result<(), KError> {
-        if let Some(mut alloc) = self.pg_allocator {
+        if let Some(ref mut alloc) = self.pg_allocator {
             alloc.free_pages(addr)
         } else {
             Err(new_kerror!(KErrorType::ENOSYS))

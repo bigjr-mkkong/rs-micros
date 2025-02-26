@@ -1,0 +1,12 @@
+Last fix:
+Mess around within src/page: alloc_pages
+
+kheap independent from main memory
+no pages inside kheap, just an naive allocator
+all pagetable structures will be kept inside main memory, however, all main memory allocator information will be kept inside kheap
+
+kalloc_page struct will contain a btreemap
+
+M mode:
+kheap init -> map all kheap area(*where does the memory of page table comes from?) -> kalloc init
+
