@@ -2,6 +2,8 @@ use core::array;
 use core::mem;
 use core::ptr;
 
+use crate::kmem::{get_kheap_start, get_kheap_pgcnt, set_kheap_start};
+use crate::cust_hmalloc;
 use crate::zone;
 use crate::zone::page_allocator;
 use crate::{M_UART, S_UART};
@@ -164,6 +166,26 @@ impl page_allocator for naive_allocator {
                                 refcnt: 1,
                                 flag: PageFlags::DEFAULT,
                             });
+                        } else {
+                            let kheap_pgcnt = get_kheap_pgcnt();
+                            set_kheap_start(alloc_addr as *mut u8);
+                            let kheap_begin = get_kheap_start();
+                            unsafe {
+                                cust_hmalloc
+                                    .lock()
+                                    .init(kheap_begin as usize, kheap_pgcnt * PAGE_SIZE);
+                            }
+                            self.pagetree_init();
+
+                            for pg_idx in 0..kheap_pgcnt{
+                                unsafe{
+                                    self.pagetree_update(&PageRec{
+                                        pfn: addr2pfn!(alloc_addr.add(PAGE_SIZE * pg_idx) as usize),
+                                        refcnt: 1,
+                                        flag: PageFlags::DEFAULT,
+                                    });
+                                }
+                            }
                         }
 
                         return Ok(alloc_addr as *mut u8);
@@ -192,6 +214,10 @@ impl page_allocator for naive_allocator {
         (free_begin_pgnum, free_pgnum) = self.rec_delete(addr)?;
 
         self.map_mark_free(free_begin_pgnum, free_pgnum);
+
+        if let Some(_) = self.pagetree {
+            self.pagetree_remove(addr2pfn!(addr as usize));
+        }
 
         Ok(())
     }
@@ -325,13 +351,18 @@ impl naive_allocator {
         }
     }
 
+    fn pagetree_init(&mut self) {
+        self.pagetree = Some(BTreeMap::<usize, PageRec>::new());
+    }
+
     fn pagetree_update(&mut self, newpg: &PageRec) -> Result<(), KError>{
         match self.pagetree {
             Some(ref mut pgtree) => {
-                pgtree.insert(newpg.pfn, *newpg).unwrap();
+                pgtree.insert(newpg.pfn, *newpg);
                 Ok(())
             },
             None => {
+                panic!();
                 Err(new_kerror!(KErrorType::EFAULT))
             }
         }
@@ -344,6 +375,22 @@ impl naive_allocator {
             },
             None => {
                 Err(new_kerror!(KErrorType::EFAULT))
+            }
+        }
+    }
+
+    fn pagetree_get(&self, pfn: usize) -> Option<PageRec> {
+        match self.pagetree {
+            Some(ref pgtree) => {
+                let ret = pgtree.get(&pfn);
+                if let Some(pgrec_ref) = ret {
+                    Some(*pgrec_ref)
+                } else{
+                    None
+                }
+            },
+            None => {
+                None
             }
         }
     }

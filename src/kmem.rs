@@ -28,6 +28,10 @@ pub fn get_kheap_start() -> *mut u8 {
     unsafe { KHEAP_START }
 }
 
+pub fn set_kheap_start(kheap_begin: *mut u8) {
+    unsafe { KHEAP_START = kheap_begin  }
+}
+
 pub fn get_page_table() -> *mut PageTable {
     unsafe { KMEM_PAGE_TABLE }
 }

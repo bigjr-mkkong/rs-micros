@@ -246,11 +246,11 @@ fn kinit() -> Result<usize, KError> {
         );
     }
 
-    unsafe {
-        cust_hmalloc
-            .lock()
-            .init(kheap_begin as usize, kheap_pgcnt * page::PAGE_SIZE);
-    }
+    // unsafe {
+    //     cust_hmalloc
+    //         .lock()
+    //         .init(kheap_begin as usize, kheap_pgcnt * page::PAGE_SIZE);
+    // }
 
     ident_range_map(
         pageroot,
