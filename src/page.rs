@@ -53,12 +53,12 @@ struct pgalloc_mark {
     flags: pgalloc_flags,
 }
 
-struct pgalloc_rec {
-    begin: *const u8,
-    pg_off: usize,
-    len: usize,
-    inuse: bool,
-}
+// struct pgalloc_rec {
+//     begin: *const u8,
+//     pg_off: usize,
+//     len: usize,
+//     inuse: bool,
+// }
 
 #[derive(Clone, Copy)]
 pub enum PageFlags {
@@ -84,8 +84,6 @@ pub struct naive_allocator {
     map_size: usize,
     mem_begin: usize,
     mem_end: usize,
-    rec_begin: usize,
-    rec_size: usize,
     pagetree: Option<BTreeMap<usize, PageRec>>
 }
 
@@ -103,7 +101,6 @@ impl page_allocator for naive_allocator {
         }
 
         let pmark_sz = mem::size_of::<pgalloc_mark>();
-        let prec_sz = mem::size_of::<pgalloc_rec>();
 
         self.zone_begin = zone_start;
         self.zone_end = zone_end;
@@ -113,34 +110,20 @@ impl page_allocator for naive_allocator {
 
         self.tot_page = (self.mem_end - self.map_begin) / PAGE_SIZE;
         self.map_size = aligh_4k!(self.tot_page * pmark_sz);
-        self.rec_begin = self.map_begin + self.map_size;
+        // self.rec_begin = self.map_begin + self.map_size;
 
-        self.rec_size = aligh_4k!(self.tot_page * prec_sz);
-        self.mem_begin = self.rec_begin + self.rec_size;
+        // self.rec_size = aligh_4k!(self.tot_page * prec_sz);
+        self.mem_begin = self.map_begin + self.map_size;
         self.tot_page = (self.mem_end - self.mem_begin) / PAGE_SIZE;
 
         let map_elecnt = self.map_size / pmark_sz;
         let rawpt_mapbegin = self.map_begin as *mut pgalloc_mark;
-        let rawpt_recbegin = self.rec_begin as *mut pgalloc_rec;
         let rawpt_membegin = self.mem_begin as *const u8;
 
         for i in 0..map_elecnt {
             unsafe {
                 rawpt_mapbegin.add(i).write(pgalloc_mark {
                     flags: pgalloc_flags::PF_FREE,
-                })
-            }
-        }
-
-        let rec_elecnt = self.rec_size / prec_sz;
-
-        for i in 0..rec_elecnt {
-            unsafe {
-                rawpt_recbegin.add(i).write(pgalloc_rec {
-                    begin: 0 as *const u8,
-                    pg_off: 0,
-                    len: 0,
-                    inuse: false,
                 })
             }
         }
@@ -244,8 +227,6 @@ impl naive_allocator {
             zone_end: 0,
             map_begin: 0,
             map_size: 0,
-            rec_begin: 0,
-            rec_size: 0,
             mem_begin: 0,
             mem_end: 0,
             pagetree: None
@@ -258,11 +239,6 @@ impl naive_allocator {
             "Mapping Begin: {:#x} -- Size: {:#x}",
             self.map_begin as usize,
             self.map_size
-        );
-        Mprintln!(
-            "Record Begin: {:#x} -- Size: {:#x}",
-            self.rec_begin as usize,
-            self.rec_size
         );
         Mprintln!(
             "Memory Begin: {:#x} -- Size: {:#x}",
