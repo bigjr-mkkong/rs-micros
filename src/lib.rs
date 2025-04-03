@@ -237,6 +237,8 @@ fn kinit() -> Result<usize, KError> {
     let kheap_begin = kmem::get_kheap_start();
     let kheap_pgcnt = kmem::get_kheap_pgcnt();
 
+    Mprintln!("kheap begin: {:#x} with {} pages", kheap_begin as usize, kheap_pgcnt);
+
     unsafe {
         ident_range_map(
             pageroot,
@@ -246,6 +248,7 @@ fn kinit() -> Result<usize, KError> {
         );
     }
 
+    //cust_hmalloc will be initialized in first time running alloc_pages()
     // unsafe {
     //     cust_hmalloc
     //         .lock()

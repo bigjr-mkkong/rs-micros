@@ -158,7 +158,8 @@ impl page_allocator for naive_allocator {
                 Ok(res) => {
                     if res == true {
                         self.map_mark_taken(i, pg_cnt);
-                        alloc_addr = self.rec_add(i, pg_cnt)?;
+
+                        alloc_addr = (self.mem_begin + (i * PAGE_SIZE)) as *const u8;
 
                         if let Some(_) = self.pagetree {
                             for pg_idx in 0..pg_cnt{
@@ -208,8 +209,8 @@ impl page_allocator for naive_allocator {
 
     /*
      * NOTE
-     * This is wrong, we need to check if each page in a sequence of page
-     * allocation all have correct refcnt
+     * alloc_pages() can allocate multiple continuous paddr pages, but free_pages can only free one
+     * page at a time.
      */
     fn free_pages(&mut self, addr: *mut u8) -> Result<(), KError> {
         // Mprintln!("Start reclaiming...");
@@ -220,20 +221,14 @@ impl page_allocator for naive_allocator {
             Ok(())
         } else {
 
-            let mut rec_arr = unsafe {
-                core::slice::from_raw_parts_mut(self.rec_begin as *mut pgalloc_rec, self.rec_size)
-            };
-
             let mut free_begin_pgnum: usize;
             let mut free_pgnum: usize;
 
-            (free_begin_pgnum, free_pgnum) = self.rec_delete(addr)?;
+            free_begin_pgnum = (addr as usize - self.mem_begin) / PAGE_SIZE;
 
-            self.map_mark_free(free_begin_pgnum, free_pgnum);
+            self.map_mark_free(free_begin_pgnum, 1);
 
-            for pg_idx in 0..free_pgnum{
-                self.pagetree_remove(pfn + pg_idx);
-            }
+            self.pagetree_remove(pfn);
 
             Ok(())
         }
@@ -316,55 +311,6 @@ impl naive_allocator {
                     flags: pgalloc_flags::PF_FREE,
                 })
             }
-        }
-    }
-
-    fn rec_add(&mut self, map_off: usize, page_cnt: usize) -> Result<*const u8, KError> {
-        let mut rec_arr;
-        unsafe {
-            rec_arr =
-                core::slice::from_raw_parts_mut(self.rec_begin as *mut pgalloc_rec, self.rec_size);
-        }
-
-        let rawpt_membegin = self.mem_begin as *mut u8;
-        for (rec_cnt, rec) in rec_arr.iter_mut().enumerate() {
-            let addr = rawpt_membegin.wrapping_byte_offset((map_off * PAGE_SIZE) as isize);
-            if rec.inuse == false {
-                *rec = pgalloc_rec {
-                    begin: addr,
-                    pg_off: map_off,
-                    len: page_cnt,
-                    inuse: true,
-                };
-                return Ok(addr);
-            }
-        }
-
-        Err(new_kerror!(KErrorType::ENOMEM))
-    }
-
-    fn rec_delete(&mut self, begin_addr: *const u8) -> Result<(usize, usize), KError> {
-        let mut free_begin_pgnum: usize = 0;
-        let mut free_pgnum: usize = 0;
-        let mut found: bool = false;
-        let rawpt_recbegin = self.rec_begin as *mut pgalloc_rec;
-
-        let rec_arr = unsafe { core::slice::from_raw_parts_mut(rawpt_recbegin, self.tot_page) };
-        for (rec_cnt, rec) in rec_arr.iter_mut().enumerate() {
-            if rec.begin == begin_addr {
-                free_begin_pgnum = rec.pg_off;
-                free_pgnum = rec.len;
-                rec.inuse = false;
-
-                found = true;
-                break;
-            }
-        }
-
-        if found == true {
-            return Ok((free_begin_pgnum, free_pgnum));
-        } else {
-            return Err(new_kerror!(KErrorType::EFAULT));
         }
     }
 
