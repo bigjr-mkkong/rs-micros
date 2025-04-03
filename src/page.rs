@@ -161,11 +161,15 @@ impl page_allocator for naive_allocator {
                         alloc_addr = self.rec_add(i, pg_cnt)?;
 
                         if let Some(_) = self.pagetree {
-                            self.pagetree_update(&PageRec{
-                                pfn: addr2pfn!(alloc_addr as usize),
-                                refcnt: 1,
-                                flag: PageFlags::DEFAULT,
-                            });
+                            for pg_idx in 0..pg_cnt{
+                                unsafe{
+                                    self.pagetree_update(&PageRec{
+                                        pfn: addr2pfn!(alloc_addr.add(PAGE_SIZE * pg_idx) as usize),
+                                        refcnt: 1,
+                                        flag: PageFlags::DEFAULT,
+                                    });
+                                }
+                            }
                         } else {
                             let kheap_pgcnt = get_kheap_pgcnt();
                             set_kheap_start(alloc_addr as *mut u8);
@@ -202,24 +206,37 @@ impl page_allocator for naive_allocator {
         Err(new_kerror!(KErrorType::ENOMEM))
     }
 
+    /*
+     * NOTE
+     * This is wrong, we need to check if each page in a sequence of page
+     * allocation all have correct refcnt
+     */
     fn free_pages(&mut self, addr: *mut u8) -> Result<(), KError> {
         // Mprintln!("Start reclaiming...");
-        let mut rec_arr = unsafe {
-            core::slice::from_raw_parts_mut(self.rec_begin as *mut pgalloc_rec, self.rec_size)
-        };
+        let pfn = addr2pfn!(addr as usize);
+        let refcnt = self.pagetree_getrefcnt(pfn).unwrap();
+        if refcnt > 1 {
+            self.pagetree_setrefcnt(pfn, refcnt - 1);
+            Ok(())
+        } else {
 
-        let mut free_begin_pgnum: usize;
-        let mut free_pgnum: usize;
+            let mut rec_arr = unsafe {
+                core::slice::from_raw_parts_mut(self.rec_begin as *mut pgalloc_rec, self.rec_size)
+            };
 
-        (free_begin_pgnum, free_pgnum) = self.rec_delete(addr)?;
+            let mut free_begin_pgnum: usize;
+            let mut free_pgnum: usize;
 
-        self.map_mark_free(free_begin_pgnum, free_pgnum);
+            (free_begin_pgnum, free_pgnum) = self.rec_delete(addr)?;
 
-        if let Some(_) = self.pagetree {
-            self.pagetree_remove(addr2pfn!(addr as usize));
+            self.map_mark_free(free_begin_pgnum, free_pgnum);
+
+            for pg_idx in 0..free_pgnum{
+                self.pagetree_remove(pfn + pg_idx);
+            }
+
+            Ok(())
         }
-
-        Ok(())
     }
 
 }
@@ -380,19 +397,23 @@ impl naive_allocator {
     }
 
     fn pagetree_get(&self, pfn: usize) -> Option<PageRec> {
-        match self.pagetree {
-            Some(ref pgtree) => {
-                let ret = pgtree.get(&pfn);
-                if let Some(pgrec_ref) = ret {
-                    Some(*pgrec_ref)
-                } else{
-                    None
-                }
-            },
-            None => {
-                None
-            }
-        }
+        self.pagetree.as_ref()?.get(&pfn).copied()
+    }
+
+    fn pagetree_getrefcnt(&self, pfn: usize) -> Option<usize> {
+        self.pagetree.as_ref()?.get(&pfn).map(|pgrec| pgrec.refcnt)
+    }
+    
+    fn pagetree_setrefcnt(&mut self, pfn: usize, newrefcnt: usize) -> Option<()> {
+        self.pagetree.as_mut()?.get_mut(&pfn).map(|pgrec| {pgrec.refcnt = newrefcnt})
+    }
+
+    fn pagetree_getflag(&self, pfn: usize) -> Option<PageFlags> {
+        self.pagetree.as_ref()?.get(&pfn).map(|pgrec| pgrec.flag)
+    }
+    
+    fn pagetree_setflag(&mut self, pfn: usize, newflag: PageFlags) -> Option<()> {
+        self.pagetree.as_mut()?.get_mut(&pfn).map(|pgrec| {pgrec.flag = newflag})
     }
 }
 
