@@ -27,7 +27,7 @@ _start:
 .option norelax
 	la		gp, _global_pointer
 .option pop
-    #Clear bss
+    # Clear bss
 	la 		a0, _bss_start
 	la		a1, _bss_end
 	bgeu	a0, a1, 2f
@@ -42,19 +42,19 @@ _start:
     mul     t0, t0, a0
     sub     sp, sp, t0
 
-    #enable M-mode and fs = 0b11
+    # enable M-mode and fs = 0b11
 	li		t0, (0b11 << 11) | (0b11 << 13) # | (1 << 7) | (1 << 13)# | (1 << 3)
 	csrw	mstatus, t0
 
-    #set mepc
+    # set mepc
 	la		t1, eh_func_kinit
 	csrw	mepc, t1
 
-    #set mtvec
+    # set mtvec
 	la		t2, m_trap_vector
 	csrw	mtvec, t2
 
-    #set stvec
+    # set stvec
 	la		t2, s_trap_vector
 	csrw	stvec, t2
 
@@ -64,19 +64,19 @@ _start:
     li      t0, 7 | (1 << 3)
     csrw    pmpcfg0, t0
 
-#switch to M-mode
+    # switch to M-mode
 	mret
 
 3:
 
-#bsp switch to S-mode
+    # bsp switch to S-mode
     csrr    a0, mhartid
     mret
 
     
-4: # other cpu(s) will arrive here
+4:  # other cpu(s) will arrive here
 
-    #allocate per-cpu stack space
+    # allocate per-cpu stack space
     la      sp, _stack_start
     li      t0, 0x10000
     csrr    a0, mhartid
@@ -85,17 +85,17 @@ _start:
 
     li      t1, 1
     sll     t1, t1, a0
-#   Non-bsp will block until bsp kinit() finished
+    #   Non-bsp will block until bsp kinit() finished
 7:
     ld      t2, cpu_early_block
     and     t2, t2, t1
     beqz    t2, 7b
 
-    #set mtvec
+    # set mtvec
 	la		t2, m_trap_vector
 	csrw	mtvec, t2
 
-    #set stvec
+    # set stvec
 	la		t2, s_trap_vector
 	csrw	stvec, t2
 
