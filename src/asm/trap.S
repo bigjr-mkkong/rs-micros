@@ -7,7 +7,7 @@ s_trap_vector:
 # and is safe to access through physical memory
     csrrw   s1, sscratch, s1
 
-    #disable memory translation
+    # disable memory translation
     csrw    satp, x0 
     sfence.vma
 
@@ -107,13 +107,13 @@ s_trap_vector:
 
     csrrw   s1, sscratch, s1
 
-#refresh satp
+# refresh satp
     sfence.vma
     sret
 
 
 m_trap_vector:
-#KERNEL_TRAP_FRAME addr is inside mscratch
+# KERNEL_TRAP_FRAME addr is inside mscratch
     csrrw   s1, mscratch, s1
     beqz    s1, paniker
 
