@@ -1,0 +1,6 @@
+{
+	"name": "Rust",
+	"image": "mcr.microsoft.com/devcontainers/rust:latest",
+
+	"postCreateCommand": "bash scripts/startup.sh"
+}

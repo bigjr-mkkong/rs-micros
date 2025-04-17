@@ -35,7 +35,7 @@ BS_OUT=os.bin
                                 
 # use `ctrl+a c` to enter qemu monitor
 
-QEMU=qemu-system-riscv64
+QEMU=qemu/bin/qemu-system-riscv64
 MACH=virt
 CPU=rv64
 CPU_CNT=2
