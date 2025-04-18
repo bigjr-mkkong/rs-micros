@@ -37,6 +37,7 @@ extern "C" {
 use core::arch::asm;
 use core::mem::size_of;
 use core::ptr;
+use kmem::init;
 use riscv::register::{medeleg, mideleg, mie, mstatus, sie, sstatus};
 use spin::Mutex;
 
@@ -91,17 +92,18 @@ extern "C" fn eh_func_kinit() -> usize {
         cpu::sscratch_write(cpu::mscratch_read());
     }
     cpu::set_cpu_mode(cpu::Mode::Machine, cpuid);
-    let init_return = kinit();
-    if let Err(er_code) = init_return {
-        Mprintln!("{}", er_code);
-        Mprintln!("kinit() Failed on CPU#{}, System halting now...", cpuid);
-        loop {
-            unsafe {
-                asm!("nop");
+    let init_return = kinit(); // m-mode
+    match init_return {
+        Err(er_code) => {
+            Mprintln!("{}", er_code);
+            Mprintln!("kinit() Failed on CPU#{}, System halting now...", cpuid);
+            loop {
+                unsafe {
+                    asm!("nop");
+                }
             }
         }
-    } else {
-        init_return.unwrap_or_default()
+        Ok(v) => v,
     }
 }
 
@@ -237,7 +239,11 @@ fn kinit() -> Result<usize, KError> {
     let kheap_begin = kmem::get_kheap_start();
     let kheap_pgcnt = kmem::get_kheap_pgcnt();
 
-    Mprintln!("kheap begin: {:#x} with {} pages", kheap_begin as usize, kheap_pgcnt);
+    Mprintln!(
+        "kheap begin: {:#x} with {} pages",
+        kheap_begin as usize,
+        kheap_pgcnt
+    );
 
     unsafe {
         ident_range_map(
