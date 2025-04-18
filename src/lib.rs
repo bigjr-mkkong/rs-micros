@@ -87,21 +87,19 @@ extern "C" fn abort() -> ! {
 #[no_mangle]
 extern "C" fn eh_func_kinit() -> usize {
     let cpuid = cpu::mhartid_read();
+    
     unsafe {
         cpu::mscratch_write((&mut KERNEL_TRAP_FRAME[cpuid] as *mut TrapFrame) as usize);
         cpu::sscratch_write(cpu::mscratch_read());
     }
+
     cpu::set_cpu_mode(cpu::Mode::Machine, cpuid);
-    let init_return = kinit(); // m-mode
-    match init_return {
+    
+    match kinit() /* m-mode */ {
         Err(er_code) => {
             Mprintln!("{}", er_code);
             Mprintln!("kinit() Failed on CPU#{}, System halting now...", cpuid);
-            loop {
-                unsafe {
-                    asm!("nop");
-                }
-            }
+            abort()
         }
         Ok(v) => v,
     }
