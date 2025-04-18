@@ -112,11 +112,7 @@ extern "C" fn eh_func_kmain(cpuid: usize) {
     if let Err(er_code) = main_return {
         Mprintln!("{}", er_code);
         Mprintln!("kmain() Failed, System halting now...");
-        loop {
-            unsafe {
-                asm!("nop");
-            }
-        }
+        abort()
     }
 }
 
@@ -136,11 +132,7 @@ extern "C" fn eh_func_kinit_nobsp() -> usize {
             "nobsp_kinit() Failed at CPU#{}, System halting now...",
             cpuid
         );
-        loop {
-            unsafe {
-                asm!("nop");
-            }
-        }
+        abort()
     } else {
         init_return.unwrap_or_default()
     }
@@ -153,11 +145,7 @@ pub extern "C" fn eh_func_nobsp_kmain() {
     if let Err(er_code) = main_return {
         Mprintln!("{}", er_code);
         Mprintln!("kmain() Failed, System halting now...");
-        loop {
-            unsafe {
-                asm!("nop");
-            }
-        }
+        abort()
     }
 }
 //   ____ _     ___  ____    _    _      __     ___    ____  ____
