@@ -11,27 +11,27 @@ MEMORY
 SECTIONS
 {
   . = 0x80000000;
-  .text :{
+  .text : {
     PROVIDE(_text_start = .);
     *(.text.init) *(.text .text.*)
     PROVIDE(_text_end = .);
   } >ram
 
-   PROVIDE(_global_pointer = .);
+  PROVIDE(_global_pointer = .);
 
-  .rodata :ALIGN(4K) {
+  .rodata : ALIGN(4K) {
     PROVIDE(_rodata_start = .);
     *(.rodata .rodata.*)
     PROVIDE(_rodata_end = .);
   } >ram
 
-  .data :ALIGN(4K) {
+  .data : ALIGN(4K) {
     PROVIDE(_data_start = .);
     *(.sdata .sdata.*) *(.data .data.*)
     PROVIDE(_data_end = .);
   } >ram
 
-  .bss :ALIGN(4K){
+  .bss : ALIGN(4K){
     PROVIDE(_bss_start = .);
     *(.sbss .sbss.*) *(.bss .bss.*)
     PROVIDE(_bss_end = .);
