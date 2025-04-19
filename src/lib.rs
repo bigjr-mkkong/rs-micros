@@ -87,14 +87,14 @@ extern "C" fn abort() -> ! {
 #[no_mangle]
 extern "C" fn eh_func_kinit() -> usize {
     let cpuid = cpu::mhartid_read();
-    
+
     unsafe {
         cpu::mscratch_write((&mut KERNEL_TRAP_FRAME[cpuid] as *mut TrapFrame) as usize);
         cpu::sscratch_write(cpu::mscratch_read());
     }
 
     cpu::set_cpu_mode(cpu::Mode::Machine, cpuid);
-    
+
     match kinit() /* m-mode */ {
         Err(er_code) => {
             Mprintln!("{}", er_code);
@@ -148,6 +148,7 @@ pub extern "C" fn eh_func_nobsp_kmain() {
         abort()
     }
 }
+
 //   ____ _     ___  ____    _    _      __     ___    ____  ____
 //  / ___| |   / _ \| __ )  / \  | |     \ \   / / \  |  _ \/ ___|
 // | |  _| |  | | | |  _ \ / _ \ | |      \ \ / / _ \ | |_) \___ \
