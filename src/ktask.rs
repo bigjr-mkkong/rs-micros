@@ -8,6 +8,7 @@ use crate::kthread::get_ktpid_lifeid;
 use crate::kthread::INVAL_KTHREADS_PID;
 use crate::sem_uart;
 use crate::IRQ_BUFFER;
+use crate::{Mprintln, Sprintln};
 use crate::{M_UART, S_UART};
 use alloc::vec::Vec;
 
@@ -64,27 +65,36 @@ pub extern "C" fn ktask_extint() {
             Sprintln!("ktask_extint() trying to blocked...");
             sem_uart.wait();
             Sprintln!("ktask_extint() unblocked");
-            let new_req = IRQ_BUFFER.peek_req(cpuid).unwrap_or_default().unwrap();
-            IRQ_BUFFER.dequeue_req(cpuid);
+            match IRQ_BUFFER.peek_req(cpuid) {
+                Ok(Some(new_req)) => {
+                    IRQ_BUFFER.dequeue_req(cpuid);
 
-            let hart = new_req.get_cpuid();
-            let extint_id = new_req.get_extint_id();
-            let data = new_req.get_data();
+                    let hart = new_req.get_cpuid();
+                    let extint_id = new_req.get_extint_id();
+                    let data = new_req.get_data();
 
-            match extint_id {
-                10 => {
-                    if let Some(ch) = data {
-                        let ch = ch as u8;
-                        Mprintln!("Uart extint at CPU#{}: {}", hart, ch as char);
-                    } else {
-                        Mprintln!("Uart extint at CPU#{}: Failed", hart);
+                    match extint_id {
+                        10 => {
+                            if let Some(ch) = data {
+                                let ch = ch as u8;
+                                Sprintln!("Uart extint at CPU#{}: {}", hart, ch as char);
+                            } else {
+                                Sprintln!("Uart extint at CPU#{}: Failed", hart);
+                            }
+                        }
+                        0 => {
+                            // do nothing
+                        }
+                        _ => {
+                            Sprintln!("Unsupported extint: #{} on CPU#{}", extint_id, hart);
+                        }
                     }
                 }
-                0 => {
-                    //do nothing when 0
+                Ok(None) => {
+                    // No interrupt pending — you can skip or log as needed
                 }
-                _ => {
-                    Mprintln!("Unsupported extint: #{} on CPU#{}", extint_id, hart);
+                Err(e) => {
+                    Sprintln!("Failed to peek IRQ on CPU#{}", cpuid);
                 }
             }
         }

@@ -5,6 +5,7 @@ use crate::kthread::INVAL_KTHREADS_PID;
 use crate::kthread::{task_flag, task_pool, task_state, task_struct};
 use crate::plic;
 use crate::sem_uart;
+use crate::Mprintln;
 use crate::EXTINT_SRCS;
 use crate::IRQ_BUFFER;
 use crate::KERNEL_TRAP_FRAME;

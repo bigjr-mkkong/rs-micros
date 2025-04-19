@@ -1,3 +1,4 @@
+use crate::{Mprintln, Sprintln};
 use core::arch::asm;
 use core::mem::size_of;
 use core::ptr;
@@ -58,7 +59,7 @@ pub fn kinit() -> Result<usize, KError> {
         mstatus::set_mpp(mstatus::MPP::Supervisor);
     }
 
-    cpu::sfence_vma();
+    cpu::flush_tlb();
 
     Ok(0)
 }

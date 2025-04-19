@@ -1,10 +1,14 @@
+use crate::alloc::collections::BTreeMap;
 use crate::cpu::flush_tlb;
 use crate::error::{KError, KErrorType};
 use crate::new_kerror;
 use crate::page;
 use crate::zone::{kfree_page, kmalloc_page, zone_type};
+use crate::GETRSETR;
 use crate::{aligh_4k, aligl_4k};
 use crate::{M_UART, S_UART};
+use alloc::collections::btree_map::Entry;
+use alloc::vec::Vec;
 
 pub struct PageTable {
     pub entries: [PageEntry; 512],
@@ -220,4 +224,103 @@ pub fn range_unmap(root: &mut PageTable, begin: usize, end: usize) -> Result<(),
     }
 
     Ok(())
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct vm_area {
+    vm_begin: usize,
+    vm_end: usize,
+    flags: usize,
+}
+
+impl vm_area {
+    pub const fn new() -> Self {
+        Self {
+            vm_begin: 0,
+            vm_end: 0,
+            flags: 0,
+        }
+    }
+
+    pub fn init(&mut self, vm_start: usize, vm_end: usize, flags: usize) {
+        self.vm_begin = aligl_4k!(vm_start);
+        self.vm_end = aligh_4k!(vm_end);
+        self.flags = flags;
+    }
+
+    GETRSETR!(vm_begin, usize);
+    GETRSETR!(vm_end, usize);
+    GETRSETR!(flags, usize);
+}
+
+struct mm {
+    vmas: Option<BTreeMap<usize, vm_area>>,
+    pgroot_addr: usize,
+    satp: u64,
+
+    heap_end: usize,
+    stack_base: usize,
+}
+
+impl mm {
+    pub const fn new() -> Self {
+        Self {
+            vmas: None,
+            pgroot_addr: 0,
+            satp: 0,
+            heap_end: 0,
+            stack_base: 0,
+        }
+    }
+
+    GETRSETR!(pgroot_addr, usize);
+    GETRSETR!(satp, u64);
+    GETRSETR!(heap_end, usize);
+    GETRSETR!(stack_base, usize);
+
+    pub fn has_vma(&self, target: vm_area) -> bool {
+        if let None = self.vmas {
+            false
+        } else {
+            match self.vmas.as_ref().unwrap().get(&target.vm_begin) {
+                Some(found_vma) => {
+                    if found_vma == &target {
+                        true
+                    } else {
+                        false
+                    }
+                }
+                None => false,
+            }
+        }
+    }
+
+    pub fn insert_vma(&mut self, new_vma: vm_area) -> Result<(), KError> {
+        let vmas = self.vmas.get_or_insert_with(BTreeMap::new);
+
+        match vmas.entry(new_vma.vm_begin) {
+            Entry::Vacant(entry) => {
+                entry.insert(new_vma);
+                Ok(())
+            }
+            Entry::Occupied(_) => Err(new_kerror!(KErrorType::EFAULT)),
+        }
+    }
+
+    pub fn get_vma(&self, addr: usize) -> Option<&vm_area> {
+        if let None = self.vmas {
+            None
+        } else {
+            self.vmas.as_ref().unwrap().get(&addr)
+        }
+    }
+
+    pub fn delete_vma(&mut self, target_vma: vm_area) -> Result<(), KError> {
+        if self.has_vma(target_vma) {
+            self.vmas.as_mut().unwrap().remove(&target_vma.vm_begin);
+            Ok(())
+        } else {
+            Err(new_kerror!(KErrorType::EFAULT))
+        }
+    }
 }

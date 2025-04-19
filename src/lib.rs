@@ -7,6 +7,7 @@
 #![feature(variant_count)]
 
 extern crate alloc;
+extern crate paste;
 
 extern "C" {
     static mut fdt_base: usize;
@@ -95,11 +96,7 @@ extern "C" fn eh_func_kinit() -> usize {
     if let Err(er_code) = init_return {
         Mprintln!("{}", er_code);
         Mprintln!("kinit() Failed on CPU#{}, System halting now...", cpuid);
-        loop {
-            unsafe {
-                asm!("nop");
-            }
-        }
+        abort();
     } else {
         init_return.unwrap_or_default()
     }
@@ -112,11 +109,7 @@ extern "C" fn eh_func_kmain(cpuid: usize) {
     if let Err(er_code) = main_return {
         Mprintln!("{}", er_code);
         Mprintln!("kmain() Failed, System halting now...");
-        loop {
-            unsafe {
-                asm!("nop");
-            }
-        }
+        abort();
     }
 }
 
@@ -191,9 +184,6 @@ pub static mut cust_hmalloc: spin_mutex<allocator::custom_kheap_malloc, S_lock> 
 
 pub static mut IRQ_BUFFER: soft_irq_buf = soft_irq_buf::new();
 
-/*
- * TODO: Debug semaphore implementation
- */
 pub static mut sem_uart: kt_semaphore = kt_semaphore::new(0);
 
 #[global_allocator]
@@ -237,7 +227,11 @@ fn kinit() -> Result<usize, KError> {
     let kheap_begin = kmem::get_kheap_start();
     let kheap_pgcnt = kmem::get_kheap_pgcnt();
 
-    Mprintln!("kheap begin: {:#x} with {} pages", kheap_begin as usize, kheap_pgcnt);
+    Mprintln!(
+        "kheap begin: {:#x} with {} pages",
+        kheap_begin as usize,
+        kheap_pgcnt
+    );
 
     unsafe {
         ident_range_map(
@@ -247,13 +241,6 @@ fn kinit() -> Result<usize, KError> {
             vm::EntryBits::ReadWrite.val(),
         );
     }
-
-    //cust_hmalloc will be initialized in first time running alloc_pages()
-    // unsafe {
-    //     cust_hmalloc
-    //         .lock()
-    //         .init(kheap_begin as usize, kheap_pgcnt * page::PAGE_SIZE);
-    // }
 
     ident_range_map(
         pageroot,
@@ -434,19 +421,6 @@ fn kinit() -> Result<usize, KError> {
     }
 
     /*
-     * Set up satp register to provide paging mode and PPN of
-     * root page table
-     */
-    cpu::satp_write(SATP_mode::Sv39, 0, pageroot_ptr as usize);
-    cpu::satp_refresh();
-
-    kmem::set_ksatp(cpu::satp_read());
-    /*
-     * Set up arrival address of S-mode entry
-     */
-    cpu::mepc_write(eh_func_kmain as usize);
-
-    /*
      * We only delegate ext interrupt and all exception to S-mode
      *
      * timer needs to be handled in M-mode since we need access to CLINT, as well as sw interrupt
@@ -466,11 +440,8 @@ fn kinit() -> Result<usize, KError> {
         sie::set_sext();
         sstatus::set_spie();
 
-        /* TODO:
-         * Get rid this ugly written code and replace with fancy vector
-         */
         EXTINT_SRCS[10].set_name(extint_name::UART0);
-        EXTINT_SRCS[10].set_id(10);
+        EXTINT_SRCS[10].set_src_id(10);
         PLIC.set_prio(&EXTINT_SRCS[10], 5)?;
         PLIC.enable(plic_ctx::CORE0_M, &EXTINT_SRCS[10])?;
         PLIC.enable(plic_ctx::CORE1_M, &EXTINT_SRCS[10])?;
@@ -478,8 +449,6 @@ fn kinit() -> Result<usize, KError> {
         PLIC.enable(plic_ctx::CORE3_M, &EXTINT_SRCS[10])?;
         mstatus::set_mpp(mstatus::MPP::Supervisor);
     }
-
-    cpu::sfence_vma();
 
     unsafe {
         KTHREAD_POOL.init(cpu::MAX_HARTS);
@@ -491,6 +460,20 @@ fn kinit() -> Result<usize, KError> {
         let early_boot: *mut u64 = ptr::addr_of_mut!(cpu_early_block);
         early_boot.write_volatile(0xffff_ffff);
     }
+
+    /*
+     * Set up satp register to provide paging mode and PPN of
+     * root page table
+     */
+    cpu::satp_write(SATP_mode::Sv39, 0, pageroot_ptr as usize);
+
+    kmem::set_ksatp(cpu::satp_read());
+    /*
+     * Set up arrival address of S-mode entry
+     */
+    cpu::mepc_write(eh_func_kmain as usize);
+
+    cpu::flush_tlb();
 
     Ok(0)
 }
@@ -536,7 +519,6 @@ fn kmain(current_cpu: usize) -> Result<(), KError> {
 }
 
 #[macro_use]
-pub mod print;
 pub mod allocator;
 pub mod clint;
 pub mod cpu;
@@ -549,9 +531,11 @@ pub mod ktask;
 pub mod ktask_manager;
 pub mod kthread;
 pub mod lock;
+pub mod macros;
 pub mod nobsp_kfunc;
 pub mod page;
 pub mod plic;
+pub mod task;
 pub mod trap;
 pub mod uart;
 pub mod vm;
