@@ -45,7 +45,7 @@ SERIAL=mon:stdio
 # SERIAL=pty
 # pty can be used to do concurrent debug, it will blast data into uart
 
-all:
+all: 
 	cargo build
 	make -C $(KHEAP_MALLOC) all
 	$(CC) $(CFLAGS) $(LINKER_SCRIPT) $(INCLUDES) -o $(OUT) $(KHEAP_MALOC_OBJ) $(SOURCES_ASM) $(LIBS) $(LIB)

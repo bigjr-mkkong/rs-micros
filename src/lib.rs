@@ -101,7 +101,10 @@ extern "C" fn eh_func_kinit() -> usize {
             Mprintln!("kinit() Failed on CPU#{}, System halting now...", cpuid);
             abort()
         }
-        Ok(v) => v,
+        Ok(v) => {
+            Mprintln!("End eh_func_kinit");
+            v
+        },
     }
 }
 
@@ -344,47 +347,47 @@ fn kinit() -> Result<usize, KError> {
 
     Mprintln!("VM Walker test: Paddr: {:#x} -> Vaddr: {:#x}", paddr, vaddr);
 
-    unsafe {
-        let mut fdt_addr = ptr::NonNull::new(fdt_base as *mut u8).unwrap();
+    // unsafe {
+    //     let mut fdt_addr = ptr::NonNull::new(fdt_base as *mut u8).unwrap();
 
-        match Fdt::from_ptr(fdt_addr) {
-            Ok(fdt_table) => {
-                Mprintln!("FDT version: {}", fdt_table.version());
-                for region in fdt_table.memory_reservation_block() {
-                    Mprintln!("region: {:?}", region);
-                }
+    //     match Fdt::from_ptr(fdt_addr) {
+    //         Ok(fdt_table) => {
+    //             Mprintln!("FDT version: {}", fdt_table.version());
+    //             for region in fdt_table.memory_reservation_block() {
+    //                 Mprintln!("region: {:?}", region);
+    //             }
 
-                for node in fdt_table.all_nodes() {
-                    let space = " ".repeat((node.level - 1) * 4);
-                    Mprintln!("{}{}", space, node.name());
+    //             for node in fdt_table.all_nodes() {
+    //                 let space = " ".repeat((node.level - 1) * 4);
+    //                 Mprintln!("{}{}", space, node.name());
 
-                    Mprintln!("{} -compatible: ", space);
-                    for cap in node.compatibles() {
-                        Mprintln!("{}     {:?}", space, cap);
-                    }
+    //                 Mprintln!("{} -compatible: ", space);
+    //                 for cap in node.compatibles() {
+    //                     Mprintln!("{}     {:?}", space, cap);
+    //                 }
 
-                    if let Some(reg) = node.reg() {
-                        Mprintln!("{} - reg: ", space);
-                        for cell in reg {
-                            Mprintln!("{}     {:?}", space, cell);
-                        }
-                    }
+    //                 if let Some(reg) = node.reg() {
+    //                     Mprintln!("{} - reg: ", space);
+    //                     for cell in reg {
+    //                         Mprintln!("{}     {:?}", space, cell);
+    //                     }
+    //                 }
 
-                    for prop in node.propertys() {
-                        Mprintln!(
-                            "{}   Property: {} = {:?}",
-                            space,
-                            prop.name,
-                            prop.raw_value()
-                        );
-                    }
-                }
-            }
-            Err(errmsg) => {
-                panic!("fdt parser failed: {:?}", errmsg);
-            }
-        }
-    }
+    //                 for prop in node.propertys() {
+    //                     Mprintln!(
+    //                         "{}   Property: {} = {:?}",
+    //                         space,
+    //                         prop.name,
+    //                         prop.raw_value()
+    //                     );
+    //                 }
+    //             }
+    //         }
+    //         Err(errmsg) => {
+    //             panic!("fdt parser failed: {:?}", errmsg);
+    //         }
+    //     }
+    // }
     /*
      * Memory allocation for trap stack
      */
