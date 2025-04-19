@@ -1,0 +1,10 @@
+{
+	"name": "Rust",
+	"image": "mcr.microsoft.com/devcontainers/rust:latest",
+
+	"postCreateCommand": "bash scripts/docker-startup.sh",
+
+	"remoteEnv": {
+		"PATH": "${containerEnv:PATH}:/workspaces/rs-micros/qemu/bin"
+	}
+}

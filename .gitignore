@@ -1,2 +1,16 @@
 /target
+/debug
+*.lock
 *.swp
+
+dump
+*.elf
+*.o
+
+/qemu
+/qemu-repo
+
+# macOS lol
+.DS_Store
+
+Cargo.lock

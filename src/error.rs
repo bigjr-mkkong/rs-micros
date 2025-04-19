@@ -24,16 +24,16 @@ pub struct KError {
 
 impl KError {
     pub fn new(
-        _er_type: KErrorType,
-        _er_fname: &'static str,
-        _er_func: &'static str,
-        _er_line: u32,
+        er_type: KErrorType,
+        er_fname: &'static str,
+        er_func: &'static str,
+        er_line: u32,
     ) -> Self {
         KError {
-            er_type: _er_type,
-            er_fname: _er_fname,
-            er_func: _er_func,
-            er_line: _er_line,
+            er_type,
+            er_fname,
+            er_func,
+            er_line,
         }
     }
 }

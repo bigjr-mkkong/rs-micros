@@ -320,6 +320,7 @@ impl task_struct {
     }
 }
 
+//TODO
 pub struct task_pool {
     POOL: [Option<Box<Vec<task_struct>>>; MAX_HARTS],
     onlline_cpu_cnt: usize,
@@ -352,10 +353,10 @@ impl task_pool {
             for (i, mut e) in self.POOL.iter_mut().enumerate() {
                 *e = Some(Box::new(Vec::new()));
             }
+            
             for fallbacker in self.fallback_task.iter_mut() {
                 let mut fallb = task_struct::new();
                 fallb.init(ktask_fallback as usize, task_flag::NORMAL);
-
                 *fallbacker = Some(Box::new(fallb));
             }
             self.next_task[cpuid] = Some(0);

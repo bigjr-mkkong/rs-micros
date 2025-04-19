@@ -1,12 +1,15 @@
 use crate::_stack_start;
 use crate::KERNEL_TRAP_FRAME;
 use core::arch::asm;
-use core::ptr::{addr_of, null_mut};
+use core::ops::BitAnd;
+use core::ops::BitOr;
+use core::ptr::null_mut;
 use riscv::register::{mstatus, sie, sstatus};
 
 pub const MAX_HARTS: usize = 4;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
+#[repr(u8)]
 pub enum Mode {
     Machine,
     Machine_IRH,
@@ -74,7 +77,7 @@ impl TrapFrame {
     }
 
     /*
-     * refresh_from() will keep origial trap_stack unchange so it only update
+     * refresh_from() will keep origial trap_stack unchange so it only updates
      * register value
      */
     pub fn refresh_from(&mut self, src: &TrapFrame) {

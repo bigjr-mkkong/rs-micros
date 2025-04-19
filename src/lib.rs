@@ -38,6 +38,7 @@ extern "C" {
 use core::arch::asm;
 use core::mem::size_of;
 use core::ptr;
+use kmem::init;
 use riscv::register::{medeleg, mideleg, mie, mstatus, sie, sstatus};
 use spin::Mutex;
 
@@ -87,18 +88,25 @@ extern "C" fn abort() -> ! {
 #[no_mangle]
 extern "C" fn eh_func_kinit() -> usize {
     let cpuid = cpu::mhartid_read();
+
     unsafe {
         cpu::mscratch_write((&mut KERNEL_TRAP_FRAME[cpuid] as *mut TrapFrame) as usize);
         cpu::sscratch_write(cpu::mscratch_read());
     }
+
     cpu::set_cpu_mode(cpu::Mode::Machine, cpuid);
-    let init_return = kinit();
-    if let Err(er_code) = init_return {
-        Mprintln!("{}", er_code);
-        Mprintln!("kinit() Failed on CPU#{}, System halting now...", cpuid);
-        abort();
-    } else {
-        init_return.unwrap_or_default()
+
+    match kinit() /* m-mode */ {
+        Err(er_code) => {
+            Mprintln!("{}", er_code);
+            Mprintln!("kinit() Failed on CPU#{}, System halting now...", cpuid);
+            abort()
+        }
+        Ok(v) => {
+            Mprintln!("End eh_func_kinit");
+            v
+        },
+
     }
 }
 
@@ -109,6 +117,7 @@ extern "C" fn eh_func_kmain(cpuid: usize) {
     if let Err(er_code) = main_return {
         Mprintln!("{}", er_code);
         Mprintln!("kmain() Failed, System halting now...");
+
         abort();
     }
 }
@@ -129,11 +138,7 @@ extern "C" fn eh_func_kinit_nobsp() -> usize {
             "nobsp_kinit() Failed at CPU#{}, System halting now...",
             cpuid
         );
-        loop {
-            unsafe {
-                asm!("nop");
-            }
-        }
+        abort()
     } else {
         init_return.unwrap_or_default()
     }
@@ -146,13 +151,10 @@ pub extern "C" fn eh_func_nobsp_kmain() {
     if let Err(er_code) = main_return {
         Mprintln!("{}", er_code);
         Mprintln!("kmain() Failed, System halting now...");
-        loop {
-            unsafe {
-                asm!("nop");
-            }
-        }
+        abort()
     }
 }
+
 //   ____ _     ___  ____    _    _      __     ___    ____  ____
 //  / ___| |   / _ \| __ )  / \  | |     \ \   / / \  |  _ \/ ___|
 // | |  _| |  | | | |  _ \ / _ \ | |      \ \ / / _ \ | |_) \___ \
@@ -338,47 +340,47 @@ fn kinit() -> Result<usize, KError> {
 
     Mprintln!("VM Walker test: Paddr: {:#x} -> Vaddr: {:#x}", paddr, vaddr);
 
-    unsafe {
-        let mut fdt_addr = ptr::NonNull::new(fdt_base as *mut u8).unwrap();
+    // unsafe {
+    //     let mut fdt_addr = ptr::NonNull::new(fdt_base as *mut u8).unwrap();
 
-        match Fdt::from_ptr(fdt_addr) {
-            Ok(fdt_table) => {
-                Mprintln!("FDT version: {}", fdt_table.version());
-                for region in fdt_table.memory_reservation_block() {
-                    Mprintln!("region: {:?}", region);
-                }
+    //     match Fdt::from_ptr(fdt_addr) {
+    //         Ok(fdt_table) => {
+    //             Mprintln!("FDT version: {}", fdt_table.version());
+    //             for region in fdt_table.memory_reservation_block() {
+    //                 Mprintln!("region: {:?}", region);
+    //             }
 
-                for node in fdt_table.all_nodes() {
-                    let space = " ".repeat((node.level - 1) * 4);
-                    Mprintln!("{}{}", space, node.name());
+    //             for node in fdt_table.all_nodes() {
+    //                 let space = " ".repeat((node.level - 1) * 4);
+    //                 Mprintln!("{}{}", space, node.name());
 
-                    Mprintln!("{} -compatible: ", space);
-                    for cap in node.compatibles() {
-                        Mprintln!("{}     {:?}", space, cap);
-                    }
+    //                 Mprintln!("{} -compatible: ", space);
+    //                 for cap in node.compatibles() {
+    //                     Mprintln!("{}     {:?}", space, cap);
+    //                 }
 
-                    if let Some(reg) = node.reg() {
-                        Mprintln!("{} - reg: ", space);
-                        for cell in reg {
-                            Mprintln!("{}     {:?}", space, cell);
-                        }
-                    }
+    //                 if let Some(reg) = node.reg() {
+    //                     Mprintln!("{} - reg: ", space);
+    //                     for cell in reg {
+    //                         Mprintln!("{}     {:?}", space, cell);
+    //                     }
+    //                 }
 
-                    for prop in node.propertys() {
-                        Mprintln!(
-                            "{}   Property: {} = {:?}",
-                            space,
-                            prop.name,
-                            prop.raw_value()
-                        );
-                    }
-                }
-            }
-            Err(errmsg) => {
-                panic!("fdt parser failed: {:?}", errmsg);
-            }
-        }
-    }
+    //                 for prop in node.propertys() {
+    //                     Mprintln!(
+    //                         "{}   Property: {} = {:?}",
+    //                         space,
+    //                         prop.name,
+    //                         prop.raw_value()
+    //                     );
+    //                 }
+    //             }
+    //         }
+    //         Err(errmsg) => {
+    //             panic!("fdt parser failed: {:?}", errmsg);
+    //         }
+    //     }
+    // }
     /*
      * Memory allocation for trap stack
      */
