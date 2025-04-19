@@ -2,6 +2,7 @@ use crate::cpu::MAX_HARTS;
 use crate::error::{KError, KErrorType};
 use crate::new_kerror;
 use crate::plic::extint_name;
+use crate::GETRSETR;
 use ringbuffer::{AllocRingBuffer, RingBuffer};
 
 pub const MAX_IRQ: usize = 128;
@@ -31,37 +32,10 @@ impl int_request {
         }
     }
 
-    pub const fn set_typ(&mut self, new_typ: int_type) {
-        self.typ = new_typ;
-    }
-
-    pub const fn set_extint_id(&mut self, newid: u32) {
-        self.extint_id = newid;
-    }
-
-    pub const fn set_cpuid(&mut self, new_cpuid: usize) {
-        self.cpuid = new_cpuid;
-    }
-
-    pub const fn set_data(&mut self, data: Option<usize>) {
-        self.data = data;
-    }
-
-    pub const fn get_typ(self) -> int_type {
-        self.typ
-    }
-
-    pub const fn get_extint_id(self) -> u32 {
-        self.extint_id
-    }
-
-    pub const fn get_cpuid(self) -> usize {
-        self.cpuid
-    }
-
-    pub const fn get_data(self) -> Option<usize> {
-        self.data
-    }
+    GETRSETR!(typ, int_type);
+    GETRSETR!(extint_id, u32);
+    GETRSETR!(cpuid, usize);
+    GETRSETR!(data, Option<usize>);
 }
 
 pub struct soft_irq_buf {

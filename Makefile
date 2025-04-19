@@ -38,7 +38,7 @@ BS_OUT=os.bin
 QEMU=qemu-system-riscv64
 MACH=virt
 CPU=rv64
-CPU_CNT=2
+CPU_CNT=1
 MEM=128M
 DRIVE=hdd.dsk
 SERIAL=mon:stdio
@@ -73,6 +73,31 @@ debug: all dump
 		-kernel $(OUT)\
 		-s -S
 
+record: all dump
+	$(QEMU) \
+		-machine $(MACH)\
+		-cpu $(CPU)\
+		-smp $(CPU_CNT)\
+		-m $(MEM)\
+		-nographic\
+		-serial $(SERIAL)\
+		-bios none\
+		-kernel $(OUT)\
+		-icount shift=auto,rr=record,rrfile=replay.bin
+
+replay: all dump
+	$(QEMU) \
+		-machine $(MACH)\
+		-cpu $(CPU)\
+		-smp $(CPU_CNT)\
+		-m $(MEM)\
+		-nographic\
+		-serial $(SERIAL)\
+		-bios none\
+		-kernel $(OUT)\
+		-icount shift=auto,rr=replay,rrfile=replay.bin \
+		-s -S
+
 bitstream: all
 	$(OBJCOPY) -I elf64-littleriscv -O binary $(OUT) $(BS_OUT)
 
@@ -82,5 +107,5 @@ dump: all
 .PHONY: clean
 clean:
 	cargo clean
-	rm -f $(OUT) dump os.bin hdd.dsk
+	rm -f $(OUT) dump os.bin hdd.dsk replay.bin
 	make -C $(KHEAP_MALLOC) clean

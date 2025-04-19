@@ -1,3 +1,4 @@
+use crate::GETRSETR;
 use core::mem::variant_count;
 
 use crate::cpu::{get_cpu_mode, which_cpu, Mode, MAX_HARTS};
@@ -33,21 +34,17 @@ impl extint_src {
         }
     }
 
-    pub fn get_name(&self) -> extint_name {
-        self.name.clone()
-    }
+    GETRSETR!(name, extint_name);
+    GETRSETR!(src_id, usize);
+    GETRSETR!(prio, usize);
 
-    pub fn get_id(&self) -> usize {
-        self.src_id
-    }
+    // pub fn get_id(&self) -> usize {
+    //     self.src_id
+    // }
 
-    pub fn set_name(&mut self, new_name: extint_name) {
-        self.name = new_name;
-    }
-
-    pub fn set_id(&mut self, new_id: usize) {
-        self.src_id = new_id;
-    }
+    // pub fn set_id(&mut self, new_id: usize) {
+    //     self.src_id = new_id;
+    // }
 }
 
 pub enum plic_ctx {
@@ -106,7 +103,7 @@ impl plic_controller {
             return Err(new_kerror!(KErrorType::EINVAL));
         }
 
-        let usz_src = src.get_id();
+        let usz_src = src.get_src_id();
         *self.prio[usz_src].lock() = new_prio;
 
         unsafe {
@@ -118,7 +115,7 @@ impl plic_controller {
     }
 
     pub fn get_prio(self, src: &extint_src) -> Result<u32, KError> {
-        let usz_src = src.get_id();
+        let usz_src = src.get_src_id();
         let reg_val = *self.prio[usz_src].lock();
 
         let mut mmio_val: u32;
@@ -135,7 +132,7 @@ impl plic_controller {
     }
 
     pub fn get_pending(&self, src: &extint_src) -> Result<bool, KError> {
-        let usz_src = src.get_id();
+        let usz_src = src.get_src_id();
         unsafe {
             let pend_pt = self.pend_base as *mut u32;
 
@@ -152,8 +149,8 @@ impl plic_controller {
 
     pub fn enable(&self, ctx: plic_ctx, src: &extint_src) -> Result<(), KError> {
         let usz_ctx = ctx.index() as usize;
-        let usz_src: usize = src.get_id() / 32;
-        let mask: u32 = (1 << (src.get_id() % 32));
+        let usz_src: usize = src.get_src_id() / 32;
+        let mask: u32 = (1 << (src.get_src_id() % 32));
         unsafe {
             let enable_pt = (self.enable_base + (usz_ctx * 0x80 + usz_src)) as *mut u32;
             let mut enable_reg: u32 = enable_pt.read();
@@ -166,8 +163,8 @@ impl plic_controller {
 
     pub fn disable(&self, ctx: plic_ctx, src: &extint_src) -> Result<(), KError> {
         let usz_ctx = ctx.index() as usize;
-        let usz_src: usize = src.get_id() / 32;
-        let mask: u32 = !(1 << (src.get_id() % 32));
+        let usz_src: usize = src.get_src_id() / 32;
+        let mask: u32 = !(1 << (src.get_src_id() % 32));
         unsafe {
             let disable_pt = (self.enable_base + (usz_ctx * 0x80 + usz_src)) as *mut u32;
             let mut disable_reg: u32 = disable_pt.read();

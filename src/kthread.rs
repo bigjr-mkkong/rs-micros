@@ -71,8 +71,7 @@ pub struct task_struct {
 
 impl Drop for task_struct {
     fn drop(&mut self) {
-        let pageroot_ptr = get_page_table();
-        let mut pageroot = unsafe { pageroot_ptr.as_mut().unwrap() };
+        let mut pageroot = unsafe { get_page_table().as_mut().unwrap() };
 
         let kt_stack_begin: *mut u8 = (self.stack_base - KTASK_STACK_SZ) as *mut u8;
         kfree_page(zone_type::ZONE_NORMAL, kt_stack_begin);
@@ -122,8 +121,7 @@ impl task_struct {
         self.flag = new_flag;
         if let task_typ::KERN_TASK = self.typ {
             self.trap_frame.satp = get_ksatp() as usize;
-            let pageroot_ptr = get_page_table();
-            let mut pageroot = unsafe { pageroot_ptr.as_mut().unwrap() };
+            let mut pageroot = unsafe { get_page_table().as_mut().unwrap() };
             self.pc = func;
             self.pid = 0;
             //initialize kernel task
@@ -154,48 +152,8 @@ impl task_struct {
                 self.trap_frame.regs[2] = self.stack_base - 1;
             }
         } else {
-            //initialize user task
-            let pg_root_ptr = kmalloc_page(zone_type::ZONE_NORMAL, 1)? as *mut PageTable;
-            let pg_root = unsafe { pg_root_ptr.as_mut().unwrap() };
-
-            let satp_root = pg_root_ptr as usize;
-            self.trap_frame.satp = make_satp(SATP_mode::Sv39, 0, satp_root);
-
-            unsafe {
-                self.pc = func;
-
-                // allocate trap stack
-                let trap_stack = kmalloc_page(zone_type::ZONE_NORMAL, 2)?.add(PAGE_SIZE * 2);
-                ident_range_map(
-                    pg_root,
-                    trap_stack.sub(2 * PAGE_SIZE) as usize,
-                    trap_stack as usize,
-                    EntryBits::ReadWrite.val(),
-                );
-
-                //allocate text segment
-                let text_mem = kmalloc_page(zone_type::ZONE_NORMAL, 1)? as *mut usize;
-                let prog_begin = self.pc as *mut usize;
-                prog_begin.copy_to_nonoverlapping(text_mem, 3);
-                mem_map(
-                    pg_root,
-                    self.pc,
-                    text_mem as usize,
-                    EntryBits::Execute.val(),
-                    0,
-                );
-
-                //allocate execution stack
-                let exe_stack = kmalloc_page(zone_type::ZONE_NORMAL, 1)?.add(PAGE_SIZE * 1);
-                ident_range_map(
-                    pg_root,
-                    exe_stack.sub(1 * PAGE_SIZE) as usize,
-                    exe_stack as usize,
-                    EntryBits::ReadWrite.val(),
-                );
-                //setup SP
-                self.trap_frame.regs[2] = exe_stack as usize;
-            }
+            //No user task here
+            return Err(new_kerror!(KErrorType::EFAULT));
         }
 
         Ok(0)
@@ -635,12 +593,6 @@ impl task_pool {
         }
     }
 
-    /*
-     * TODO:
-     * Disable interrupt when next task is extint-handler
-     * Re-enable interrupt when last task is extint-handler
-     * We need to make sure extint-handler will not preempt when it is executing
-     */
     pub fn sched(&mut self, cpuid: usize) -> Result<(), KError> {
         let live_cnt = self.get_scheduable_cnt(cpuid);
         self.generate_next(cpuid)?;
@@ -651,8 +603,6 @@ impl task_pool {
                 Some(ref mut taskvec) => {
                     if live_cnt == 0 {
                         taskvec.clear();
-                        //TODO:
-                        //Make it looks better with macro
                         self.current_task = [Some(0), Some(0), Some(0), Some(0)];
                         self.next_task = [Some(0), Some(0), Some(0), Some(0)];
                         return Ok(());

@@ -116,12 +116,6 @@ pub fn satp_write(satp_mode: SATP_mode, asid_val: usize, root_addr: usize) {
     }
 }
 
-pub fn satp_refresh() {
-    unsafe {
-        asm!("sfence.vma");
-    }
-}
-
 pub fn flush_tlb() {
     unsafe {
         asm!("sfence.vma");
@@ -243,12 +237,6 @@ pub fn mhartid_read() -> usize {
     }
 
     mhartid_val
-}
-
-pub fn sfence_vma() {
-    unsafe {
-        asm!("sfence.vma");
-    }
 }
 
 #[no_mangle]
