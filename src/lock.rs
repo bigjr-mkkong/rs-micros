@@ -57,7 +57,7 @@ impl IntControl for Critical_Area {
 
         let current_mode = get_cpu_mode(cpuid);
 
-        if current_mode as u8 & (Mode::Machine as u8 | Mode::Machine_IRH as u8) {
+        if current_mode as u8 & (Mode::Machine as u8 | Mode::Machine_IRH as u8) == 0 {
             trapping(S2Mop::STI, None);
         }
     }
