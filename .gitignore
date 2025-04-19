@@ -12,3 +12,5 @@ dump
 
 # macOS lol
 .DS_Store
+
+Cargo.lock
