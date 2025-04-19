@@ -74,7 +74,7 @@ impl TrapFrame {
     }
 
     /*
-     * refresh_from() will keep origial trap_stack unchange so it only update
+     * refresh_from() will keep origial trap_stack unchange so it only updates
      * register value
      */
     pub fn refresh_from(&mut self, src: &TrapFrame) {
