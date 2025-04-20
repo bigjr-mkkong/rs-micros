@@ -50,6 +50,7 @@ impl page_allocator for Allocators {
     }
 }
 
+//TODO remove "ZONE_"
 #[derive(Clone, Copy)]
 pub enum zone_type {
     ZONE_UNDEF = (0),
@@ -66,6 +67,7 @@ impl zone_type {
         }
     }
 
+    //TODO rename val into to_index
     pub fn val(&self) -> usize {
         *self as usize
     }

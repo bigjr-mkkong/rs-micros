@@ -1,2 +1,6 @@
-Next:
-    jump into U mode test
+./src/lib.rs:    //TODO Remove this unsafe
+./src/kthread.rs://TODO Remove "_TASK"
+./src/page.rs://TODO remove "PF"
+./src/kmem.rs://TODO: rewrite whole thing, put them into a struct
+./src/zone.rs://TODO remove "ZONE_"
+./src/zone.rs:    //TODO rename val into to_index

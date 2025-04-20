@@ -1,6 +1,7 @@
 use crate::error::{KError, KErrorType};
 use crate::vm::PageTable;
 use crate::zone::{kfree_page, kmalloc_page, zone_type};
+//TODO: rewrite whole thing, put them into a struct
 
 static mut KHEAP_START: *mut u8 = 0 as *mut u8;
 static mut KHEAP_PGCNT: usize = 256;
