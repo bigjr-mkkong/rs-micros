@@ -37,11 +37,10 @@ pub enum task_state {
     Dead,
 }
 
-//TODO Remove "_TASK"
 #[derive(Clone, Copy)]
 pub enum task_typ {
-    KERN_TASK,
-    USER_TASK,
+    KERN,
+    USER,
 }
 
 #[derive(Clone, Copy)]
@@ -94,7 +93,7 @@ impl task_struct {
             stack_base: 0 as usize,
             exp_stack_base: 0 as usize,
             pid: 0 as usize,
-            typ: task_typ::KERN_TASK,
+            typ: task_typ::KERN,
             flag: task_flag::NORMAL,
             life_id: 0,
         }
@@ -120,7 +119,7 @@ impl task_struct {
         self.trap_frame.cpuid = self.cpu;
         self.state = task_state::Ready;
         self.flag = new_flag;
-        if let task_typ::KERN_TASK = self.typ {
+        if let task_typ::KERN = self.typ {
             self.trap_frame.satp = get_ksatp() as usize;
             let mut pageroot = unsafe { get_page_table().as_mut().unwrap() };
             self.pc = func;
@@ -183,10 +182,10 @@ impl task_struct {
         let next_pc = self.pc;
         unsafe {
             match self.typ {
-                task_typ::KERN_TASK => {
+                task_typ::KERN => {
                     sstatus::set_spp(sstatus::SPP::Supervisor);
                 }
-                task_typ::USER_TASK => {
+                task_typ::USER => {
                     sstatus::set_spp(sstatus::SPP::User);
                 }
             }
@@ -256,10 +255,10 @@ impl task_struct {
         let next_pc = self.pc;
         unsafe {
             match self.typ {
-                task_typ::KERN_TASK => {
+                task_typ::KERN => {
                     sstatus::set_spp(sstatus::SPP::Supervisor);
                 }
-                task_typ::USER_TASK => {
+                task_typ::USER => {
                     sstatus::set_spp(sstatus::SPP::User);
                 }
             }
