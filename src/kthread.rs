@@ -425,35 +425,49 @@ impl task_pool {
     }
 
     pub fn save_from_ktrapframe(&mut self, cpuid: usize) -> Result<(), KError> {
-        if let Some(cur_taskidx) = self.current_task[cpuid] {
-            match self.POOL[cpuid] {
-                Some(ref mut taskvec) => {
-                    taskvec[cur_taskidx].save();
-                    return Ok(());
-                }
-                None => {
-                    return Err(new_kerror!(KErrorType::EINVAL));
-                }
-            }
+        if let (Some(cur_taskidx), Some(ref mut taskvec)) = (self.current_task[cpuid], &mut self.POOL[cpuid]) {
+            taskvec[cur_taskidx].save();
+            Ok(())
         } else {
-            return Err(new_kerror!(KErrorType::EINVAL));
+            Err(new_kerror!(KErrorType::EINVAL))
         }
+
+        // if let Some(cur_taskidx) = self.current_task[cpuid] {
+        //     match self.POOL[cpuid] {
+        //         Some(ref mut taskvec) => {
+        //             taskvec[cur_taskidx].save();
+        //             return Ok(());
+        //         }
+        //         None => {
+        //             return Err(new_kerror!(KErrorType::EINVAL));
+        //         }
+        //     }
+        // } else {
+        //     return Err(new_kerror!(KErrorType::EINVAL));
+        // }
     }
 
     pub fn set_current_state(&mut self, cpuid: usize, new_state: task_state) -> Result<(), KError> {
-        if let Some(cur_taskidx) = self.current_task[cpuid] {
-            match self.POOL[cpuid] {
-                Some(ref mut taskvec) => {
-                    taskvec[cur_taskidx].set_state(new_state);
-                    return Ok(());
-                }
-                None => {
-                    return Err(new_kerror!(KErrorType::EINVAL));
-                }
-            }
+        if let (Some(cur_taskidx), Some(ref mut taskvec)) = (self.current_task[cpuid], &mut self.POOL[cpuid]) {
+            taskvec[cur_taskidx].set_state(new_state);
+            Ok(())
         } else {
-            return Err(new_kerror!(KErrorType::EINVAL));
+            Err(new_kerror!(KErrorType::EINVAL))
         }
+        
+        // if let Some(cur_taskidx) = self.current_task[cpuid] {
+        //     match self.POOL[cpuid] {
+        //         Some(ref mut taskvec) => {
+        //             taskvec[cur_taskidx].set_state(new_state);
+        //             return Ok(());
+        //         }
+        //         None => {
+        //             return Err(new_kerror!(KErrorType::EINVAL));
+        //         }
+        //     }
+        // } else {
+        //     return Err(new_kerror!(KErrorType::EINVAL));
+        // }
     }
 
     pub fn set_currentPC(&mut self, cpuid: usize, newpc: usize) -> Result<(), KError> {
@@ -503,29 +517,41 @@ impl task_pool {
     }
 
     pub fn get_current_pid(&self, cpuid: usize) -> Result<usize, KError> {
-        if let Some(cur_taskidx) = self.current_task[cpuid] {
-            match self.POOL[cpuid] {
-                Some(ref taskvec) => Ok(taskvec[cur_taskidx].pid),
-                None => {
-                    return Err(new_kerror!(KErrorType::EINVAL));
-                }
-            }
+        if let (Some(cur_taskidx), Some(ref taskvec)) = (self.current_task[cpuid], &self.POOL[cpuid]) {
+            Ok(taskvec[cur_taskidx].pid)
         } else {
-            return Err(new_kerror!(KErrorType::EINVAL));
+            Err(new_kerror!(KErrorType::EINVAL))
         }
+        
+        // if let Some(cur_taskidx) = self.current_task[cpuid] {
+        //     match self.POOL[cpuid] {
+        //         Some(ref taskvec) => Ok(taskvec[cur_taskidx].pid),
+        //         None => {
+        //             return Err(new_kerror!(KErrorType::EINVAL));
+        //         }
+        //     }
+        // } else {
+        //     return Err(new_kerror!(KErrorType::EINVAL));
+        // }
     }
 
     pub fn get_current_lifeid(&self, cpuid: usize) -> Result<usize, KError> {
-        if let Some(cur_taskidx) = self.current_task[cpuid] {
-            match self.POOL[cpuid] {
-                Some(ref taskvec) => Ok(taskvec[cur_taskidx].life_id),
-                None => {
-                    return Err(new_kerror!(KErrorType::EINVAL));
-                }
-            }
+        if let (Some(cur_taskidx), Some(ref taskvec)) = (self.current_task[cpuid], &self.POOL[cpuid]) {
+            Ok(taskvec[cur_taskidx].life_id)
         } else {
-            return Err(new_kerror!(KErrorType::EINVAL));
+            Err(new_kerror!(KErrorType::EINVAL))
         }
+        
+        // if let Some(cur_taskidx) = self.current_task[cpuid] {
+        //     match self.POOL[cpuid] {
+        //         Some(ref taskvec) => Ok(taskvec[cur_taskidx].life_id),
+        //         None => {
+        //             return Err(new_kerror!(KErrorType::EINVAL));
+        //         }
+        //     }
+        // } else {
+        //     return Err(new_kerror!(KErrorType::EINVAL));
+        // }
     }
 
     fn get_scheduable_cnt(&self, cpuid: usize) -> usize {
