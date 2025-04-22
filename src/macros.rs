@@ -69,8 +69,8 @@ macro_rules! GETRSETR {
                 self.$name
             }
 
-            pub fn [<set_ $name>](&mut self, new_val: $type) {
-                self.$name = new_val;
+            pub fn [<set_ $name>](&mut self, [<new_ $name>]: $type) {
+                self.$name = [<new_ $name>];
             }
         }
     };
