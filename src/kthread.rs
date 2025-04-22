@@ -477,16 +477,22 @@ impl task_pool {
     }
 
     pub fn get_current_fg(&self, cpuid: usize) -> Result<task_flag, KError> {
-        if let Some(cur_taskidx) = self.current_task[cpuid] {
-            match self.POOL[cpuid] {
-                Some(ref taskvec) => Ok(taskvec[cur_taskidx].flag),
-                None => {
-                    return Err(new_kerror!(KErrorType::EINVAL));
-                }
-            }
+        if let (Some(cur_taskidx), Some(ref taskvec)) = (self.current_task[cpuid], &self.POOL[cpuid]) {
+            Ok(taskvec[cur_taskidx].flag)
         } else {
-            return Err(new_kerror!(KErrorType::EINVAL));
+            Err(new_kerror!(KErrorType::EINVAL))
         }
+        
+        // if let Some(cur_taskidx) = self.current_task[cpuid] {
+        //     match self.POOL[cpuid] {
+        //         Some(ref taskvec) => Ok(taskvec[cur_taskidx].flag),
+        //         None => {
+        //             return Err(new_kerror!(KErrorType::EINVAL));
+        //         }
+        //     }
+        // } else {
+        //     return Err(new_kerror!(KErrorType::EINVAL));
+        // }
     }
 
     pub fn get_current_pid(&self, cpuid: usize) -> Result<usize, KError> {
