@@ -45,10 +45,9 @@ macro_rules! addr2pfn {
  *
  * They are independent from each other
  */
-//TODO remove "PF"
 enum pgalloc_flags {
-    PF_FREE = (1 << 0),
-    PF_TAKEN = (1 << 1),
+    FREE = (1 << 0),
+    TAKEN = (1 << 1),
 }
 
 struct pgalloc_mark {
@@ -125,7 +124,7 @@ impl page_allocator for naive_allocator {
         for i in 0..map_elecnt {
             unsafe {
                 rawpt_mapbegin.add(i).write(pgalloc_mark {
-                    flags: pgalloc_flags::PF_FREE,
+                    flags: pgalloc_flags::FREE,
                 })
             }
         }
@@ -261,7 +260,7 @@ impl naive_allocator {
             unsafe { core::slice::from_raw_parts(rawpt_mapbegin.add(map_off), self.tot_page) };
 
         for (reg_cnt, reg) in map_arr.iter().enumerate() {
-            if let pgalloc_flags::PF_TAKEN = reg.flags {
+            if let pgalloc_flags::TAKEN = reg.flags {
                 return Ok(false);
             }
         }
@@ -275,7 +274,7 @@ impl naive_allocator {
         for i in 0..page_cnt {
             unsafe {
                 mark_begin.add(i).write(pgalloc_mark {
-                    flags: pgalloc_flags::PF_TAKEN,
+                    flags: pgalloc_flags::TAKEN,
                 })
             }
         }
@@ -287,7 +286,7 @@ impl naive_allocator {
         for i in 0..page_cnt {
             unsafe {
                 mark_begin.add(i).write(pgalloc_mark {
-                    flags: pgalloc_flags::PF_FREE,
+                    flags: pgalloc_flags::FREE,
                 })
             }
         }
