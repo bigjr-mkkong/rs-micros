@@ -45,6 +45,7 @@ macro_rules! addr2pfn {
  *
  * They are independent from each other
  */
+//TODO remove "PF"
 enum pgalloc_flags {
     PF_FREE = (1 << 0),
     PF_TAKEN = (1 << 1),

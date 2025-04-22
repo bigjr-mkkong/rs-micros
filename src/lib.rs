@@ -235,6 +235,7 @@ fn kinit() -> Result<usize, KError> {
         kheap_pgcnt
     );
 
+    //TODO Remove this unsafe
     unsafe {
         ident_range_map(
             pageroot,
@@ -310,7 +311,7 @@ fn kinit() -> Result<usize, KError> {
 
     //qemu mmio memory mapping according to qemu/hw/riscv/virt.c
 
-    //CLIENT
+    //CLINT
     ident_range_map(
         pageroot,
         0x0200_0000,
@@ -500,13 +501,13 @@ fn kmain(current_cpu: usize) -> Result<(), KError> {
         IRQ_BUFFER.init();
     }
 
-    Sprintln!("---------->>Start Process<<----------");
+    Sprintln!("---------->>Start Ktask<<----------");
     unsafe {
         // let mut pcb_khello: task_struct = task_struct::new();
         // let mut pcb_second: task_struct = task_struct::new();
         let sched_cpu = which_cpu();
 
-        // KTHREAD_POOL.spawn(KHello_task0 as usize, task_flag::NORMAL, sched_cpu)?;
+        KTHREAD_POOL.spawn(KHello_task0 as usize, task_flag::NORMAL, sched_cpu)?;
         KTHREAD_POOL.spawn(KHello_task1 as usize, task_flag::NORMAL, sched_cpu)?;
         // KTHREAD_POOL.spawn(ksem_test0 as usize, task_flag::NORMAL, sched_cpu)?;
         KTHREAD_POOL.spawn(ktask_extint as usize, task_flag::CRITICAL, sched_cpu)?;
@@ -514,6 +515,7 @@ fn kmain(current_cpu: usize) -> Result<(), KError> {
     }
 
     loop {
+        //Not suppose to reach here
         cpu::busy_delay(1);
     }
 

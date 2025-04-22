@@ -37,6 +37,7 @@ pub enum task_state {
     Dead,
 }
 
+//TODO Remove "_TASK"
 #[derive(Clone, Copy)]
 pub enum task_typ {
     KERN_TASK,
