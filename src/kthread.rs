@@ -457,19 +457,26 @@ impl task_pool {
     }
 
     pub fn set_currentPC(&mut self, cpuid: usize, newpc: usize) -> Result<(), KError> {
-        if let Some(cur_taskidx) = self.current_task[cpuid] {
-            match self.POOL[cpuid] {
-                Some(ref mut taskvec) => {
-                    taskvec[cur_taskidx].set_pc(newpc);
-                    return Ok(());
-                }
-                None => {
-                    return Err(new_kerror!(KErrorType::EINVAL));
-                }
-            }
+        if let (Some(cur_taskidx), Some(ref mut taskvec)) = (self.current_task[cpuid], &mut self.POOL[cpuid]) {
+            taskvec[cur_taskidx].set_pc(newpc);
+            Ok(())
         } else {
-            return Err(new_kerror!(KErrorType::EINVAL));
+            Err(new_kerror!(KErrorType::EINVAL))
         }
+
+        // if let Some(cur_taskidx) = self.current_task[cpuid] {
+        //     match self.POOL[cpuid] {
+        //         Some(ref mut taskvec) => {
+        //             taskvec[cur_taskidx].set_pc(newpc);
+        //             return Ok(());
+        //         }
+        //         None => {
+        //             return Err(new_kerror!(KErrorType::EINVAL));
+        //         }
+        //     }
+        // } else {
+        //     return Err(new_kerror!(KErrorType::EINVAL));
+        // }
     }
 
     pub fn get_crit_task_mie(&self) -> &[usize; MAX_HARTS] {
