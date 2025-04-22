@@ -154,7 +154,9 @@ extern "C" fn eh_func_kinit_nobsp() -> usize {
 #[no_mangle]
 pub extern "C" fn eh_func_nobsp_kmain() {
     let main_return = nobsp_kmain();
+
     cpu::set_cpu_mode(cpu::Mode::Supervisor, which_cpu());
+    
     if let Err(er_code) = main_return {
         Mprintln!("{}", er_code);
         Mprintln!("kmain() Failed, System halting now...");
