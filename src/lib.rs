@@ -61,9 +61,6 @@ use ringbuffer::AllocRingBuffer;
 use vm::{ident_range_map, virt2phys};
 use zone::{kfree_page, kmalloc_page, zone_type};
 
-#[no_mangle]
-extern "C" fn eh_personality() {}
-
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     Mprint!("System Aborting...");
@@ -156,7 +153,7 @@ pub extern "C" fn eh_func_nobsp_kmain() {
     let main_return = nobsp_kmain();
 
     cpu::set_cpu_mode(cpu::Mode::Supervisor, which_cpu());
-    
+
     if let Err(er_code) = main_return {
         Mprintln!("{}", er_code);
         Mprintln!("kmain() Failed, System halting now...");
