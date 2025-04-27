@@ -1,4 +1,3 @@
-use crate::GETRSETR;
 use core::mem::variant_count;
 
 use crate::cpu::{get_cpu_mode, which_cpu, Mode, MAX_HARTS};
@@ -7,6 +6,7 @@ use crate::lock::{M_lock, S_lock};
 use crate::new_kerror;
 use crate::{KError, KErrorType};
 use crate::{M_UART, S_UART};
+use get_set_macro::get_set;
 use spin::Mutex;
 
 pub const PLIC_BASE: usize = 0x0c00_0000;
@@ -18,8 +18,10 @@ pub enum extint_name {
     UART0,
 }
 
+#[get_set(get_copy(inline_always, vis = "pub"), set(inline_always, vis = "pub"))]
 #[derive(Clone, Copy)]
 pub struct extint_src {
+    #[gsflags(get(inline_always, vis = "pub"))]
     name: extint_name,
     src_id: usize,
     prio: usize,
@@ -33,18 +35,6 @@ impl extint_src {
             prio: 0,
         }
     }
-
-    GETRSETR!(name, extint_name);
-    GETRSETR!(src_id, usize);
-    GETRSETR!(prio, usize);
-
-    // pub fn get_id(&self) -> usize {
-    //     self.src_id
-    // }
-
-    // pub fn set_id(&mut self, new_id: usize) {
-    //     self.src_id = new_id;
-    // }
 }
 
 pub enum plic_ctx {

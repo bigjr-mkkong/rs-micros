@@ -60,18 +60,3 @@ macro_rules! Sprintln
     });
 
 }
-
-#[macro_export]
-macro_rules! GETRSETR {
-    ($name:ident, $type:ty) => {
-        $crate::paste::paste! {
-            pub fn [<get_ $name>](&self) -> $type {
-                self.$name
-            }
-
-            pub fn [<set_ $name>](&mut self, [<new_ $name>]: $type) {
-                self.$name = [<new_ $name>];
-            }
-        }
-    };
-}

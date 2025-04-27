@@ -2,7 +2,7 @@ use crate::cpu::MAX_HARTS;
 use crate::error::{KError, KErrorType};
 use crate::new_kerror;
 use crate::plic::extint_name;
-use crate::GETRSETR;
+use get_set_macro::get_set;
 use ringbuffer::{AllocRingBuffer, RingBuffer};
 
 pub const MAX_IRQ: usize = 128;
@@ -14,10 +14,13 @@ pub enum int_type {
     NONE,
 }
 
+#[get_set(get(inline_always, vis = "pub"), set(inline_always, vis = "pub"))]
 #[derive(Clone, Copy)]
 pub struct int_request {
     typ: int_type,
+    #[gsflags(get_copy(inline_always, vis = "pub"))]
     extint_id: u32,
+    #[gsflags(get_copy(inline_always, vis = "pub"))]
     cpuid: usize,
     data: Option<usize>,
 }
@@ -31,11 +34,6 @@ impl int_request {
             data: None,
         }
     }
-
-    GETRSETR!(typ, int_type);
-    GETRSETR!(extint_id, u32);
-    GETRSETR!(cpuid, usize);
-    GETRSETR!(data, Option<usize>);
 }
 
 pub struct soft_irq_buf {

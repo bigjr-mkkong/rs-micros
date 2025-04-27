@@ -4,11 +4,11 @@ use crate::error::{KError, KErrorType};
 use crate::new_kerror;
 use crate::page;
 use crate::zone::{kfree_page, kmalloc_page, zone_type};
-use crate::GETRSETR;
 use crate::{aligh_4k, aligl_4k};
 use crate::{M_UART, S_UART};
 use alloc::collections::btree_map::Entry;
 use alloc::vec::Vec;
+use get_set_macro::get_set;
 
 pub struct PageTable {
     pub entries: [PageEntry; 512],
@@ -226,6 +226,7 @@ pub fn range_unmap(root: &mut PageTable, begin: usize, end: usize) -> Result<(),
     Ok(())
 }
 
+#[get_set(get_copy(inline_always, vis = "pub"), set(inline_always, vis = "pub"))]
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct vm_area {
     vm_begin: usize,
@@ -247,14 +248,13 @@ impl vm_area {
         self.vm_end = aligh_4k!(vm_end);
         self.flags = flags;
     }
-
-    GETRSETR!(vm_begin, usize);
-    GETRSETR!(vm_end, usize);
-    GETRSETR!(flags, usize);
 }
 
+#[get_set(get_copy(inline_always, vis = "pub"), set(inline_always, vis = "pub"))]
 struct mm {
+    #[gsflags(skip)]
     vmas: Option<BTreeMap<usize, vm_area>>,
+
     pgroot_addr: usize,
     satp: u64,
 
@@ -272,11 +272,6 @@ impl mm {
             stack_base: 0,
         }
     }
-
-    GETRSETR!(pgroot_addr, usize);
-    GETRSETR!(satp, u64);
-    GETRSETR!(heap_end, usize);
-    GETRSETR!(stack_base, usize);
 
     pub fn has_vma(&self, target: vm_area) -> bool {
         if let None = self.vmas {
