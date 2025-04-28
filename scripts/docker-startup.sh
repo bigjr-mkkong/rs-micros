@@ -1,3 +1,5 @@
+#!/bin/bash
+
 sudo apt update -y
 sudo apt upgrade -y
 sudo apt install -y software-properties-common gcc-riscv64-linux-gnu
@@ -8,5 +10,5 @@ cargo install cargo-binutils
 rustup component add rustfmt
 
 if [ ! -d "qemu" ]; then
-    sudo bash "scripts/install-qemu.sh"
+    sudo bash "./scripts/install-qemu.sh"
 fi
