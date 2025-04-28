@@ -14,13 +14,13 @@ pub enum int_type {
     NONE,
 }
 
-#[get_set(get(inline_always, vis = "pub"), set(inline_always, vis = "pub"))]
+#[get_set(default(inline_always, vis = "pub"), get, set)]
 #[derive(Clone, Copy)]
 pub struct int_request {
     typ: int_type,
-    #[gsflags(get_copy(inline_always, vis = "pub"))]
+    #[gsflags(get_copy)]
     extint_id: u32,
-    #[gsflags(get_copy(inline_always, vis = "pub"))]
+    #[gsflags(get_copy)]
     cpuid: usize,
     data: Option<usize>,
 }
