@@ -61,9 +61,6 @@ use ringbuffer::AllocRingBuffer;
 use vm::{ident_range_map, virt2phys};
 use zone::{kfree_page, kmalloc_page, zone_type};
 
-#[no_mangle]
-extern "C" fn eh_personality() {}
-
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     Mprint!("System Aborting...");
@@ -113,7 +110,9 @@ extern "C" fn eh_func_kinit() -> usize {
 #[no_mangle]
 extern "C" fn eh_func_kmain(cpuid: usize) {
     cpu::set_cpu_mode(cpu::Mode::Supervisor, cpuid);
+
     let main_return = kmain(cpuid);
+
     if let Err(er_code) = main_return {
         Mprintln!("{}", er_code);
         Mprintln!("kmain() Failed, System halting now...");
@@ -125,29 +124,36 @@ extern "C" fn eh_func_kmain(cpuid: usize) {
 #[no_mangle]
 extern "C" fn eh_func_kinit_nobsp() -> usize {
     let cpuid = cpu::mhartid_read();
+
     unsafe {
         cpu::mscratch_write((&mut KERNEL_TRAP_FRAME[cpuid] as *mut TrapFrame) as usize);
         cpu::sscratch_write(cpu::mscratch_read());
         KERNEL_TRAP_FRAME[cpuid].cpuid = cpuid;
     }
+
     cpu::set_cpu_mode(cpu::Mode::Machine, cpuid);
+
     let init_return = nobsp_kinit();
-    if let Err(er_code) = init_return {
-        Mprintln!("{}", er_code);
-        Mprintln!(
-            "nobsp_kinit() Failed at CPU#{}, System halting now...",
-            cpuid
-        );
-        abort()
-    } else {
-        init_return.unwrap_or_default()
+
+    match init_return {
+        Err(er_code) => {
+            Mprintln!("{}", er_code);
+            Mprintln!(
+                "nobsp_kinit() Failed at CPU#{}, System halting now...",
+                cpuid
+            );
+            abort()
+        }
+        Ok(v) => v
     }
 }
 
 #[no_mangle]
 pub extern "C" fn eh_func_nobsp_kmain() {
     let main_return = nobsp_kmain();
+
     cpu::set_cpu_mode(cpu::Mode::Supervisor, which_cpu());
+
     if let Err(er_code) = main_return {
         Mprintln!("{}", er_code);
         Mprintln!("kmain() Failed, System halting now...");

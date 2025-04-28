@@ -76,7 +76,7 @@ pub extern "C" fn ktask_extint() {
                     match extint_id {
                         10 => {
                             if let Some(ch) = data {
-                                let ch = ch as u8;
+                                let ch = *ch as u8;
                                 Sprintln!("Uart extint at CPU#{}: {}", hart, ch as char);
                             } else {
                                 Sprintln!("Uart extint at CPU#{}: Failed", hart);
