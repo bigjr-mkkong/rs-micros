@@ -15,7 +15,3 @@ git pull https://github.com/qemu/qemu.git master
 make -j $(nproc)
 sudo make install
 cd ..
-
-# Doesn't work in my setup as $PATH gets reset all the time for some reason
-# Commented for consistency - makefile is good enough
-# export PATH="$PATH:/workspaces/rs-micros/qemu/bin"
