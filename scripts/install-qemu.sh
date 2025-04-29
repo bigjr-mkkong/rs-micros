@@ -3,7 +3,10 @@
 sudo apt install -y python3 python3-venv python3-sphinx ninja-build
 
 cd /workspaces/rs-micros
-sudo rm -rf qemu
+
+if [ -d "qemu" ]; then
+    sudo rm -rf qemu
+fi
 
 if [ ! -d "qemu-repo" ]; then
     git clone https://github.com/qemu/qemu qemu-repo
