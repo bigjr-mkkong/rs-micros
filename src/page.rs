@@ -250,14 +250,14 @@ impl naive_allocator {
         Mprintln!("------------Allocator Info End------------");
     }
 
-    fn map_first_fit_avail(&self, map_off: usize, thres_pg: usize) -> Result<bool, KError> {
-        if map_off + thres_pg > self.tot_page {
+    fn map_first_fit_avail(&self, map_off: usize, page_cnt: usize) -> Result<bool, KError> {
+        if map_off + page_cnt > self.tot_page {
             return Err(new_kerror!(KErrorType::ENOMEM));
         }
         let rawpt_mapbegin = self.map_begin as *mut pgalloc_mark;
 
         let map_arr =
-            unsafe { core::slice::from_raw_parts(rawpt_mapbegin.add(map_off), self.tot_page) };
+            unsafe { core::slice::from_raw_parts(rawpt_mapbegin.add(map_off), page_cnt) };
 
         for (reg_cnt, reg) in map_arr.iter().enumerate() {
             if let pgalloc_flags::TAKEN = reg.flags {
