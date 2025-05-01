@@ -18,10 +18,10 @@ pub enum extint_name {
     UART0,
 }
 
-#[get_set(get_copy(inline_always, vis = "pub"), set(inline_always, vis = "pub"))]
+#[get_set(default(inline_always, vis = "pub"), get_copy, set)]
 #[derive(Clone, Copy)]
 pub struct extint_src {
-    #[gsflags(get(inline_always, vis = "pub"))]
+    #[gsflags(get)]
     name: extint_name,
     src_id: usize,
     prio: usize,

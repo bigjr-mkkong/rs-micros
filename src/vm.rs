@@ -226,7 +226,7 @@ pub fn range_unmap(root: &mut PageTable, begin: usize, end: usize) -> Result<(),
     Ok(())
 }
 
-#[get_set(get_copy(inline_always, vis = "pub"), set(inline_always, vis = "pub"))]
+#[get_set(default(inline_always, vis = "pub"), get_copy, set)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct vm_area {
     vm_begin: usize,
@@ -250,7 +250,7 @@ impl vm_area {
     }
 }
 
-#[get_set(get_copy(inline_always, vis = "pub"), set(inline_always, vis = "pub"))]
+#[get_set(default(inline_always, vis = "pub"), get_copy, set)]
 struct mm {
     #[gsflags(skip)]
     vmas: Option<BTreeMap<usize, vm_area>>,
