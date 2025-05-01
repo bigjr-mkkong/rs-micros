@@ -4,7 +4,7 @@
 .equ    BSP,     0            # Define BSP (Boot Strap Processor) core ID as 0
 .global cpu_early_block
 cpu_early_block:    
-    .dword      (1 << BSP)    # Bitmask for CPU initialization state (bit 0 set for BSP)
+    .dword      (1 << BSP)    # Bitmask for CPU early blocking (bit 0 set for BSP)
 
 .global fdt_base
 fdt_base:
@@ -20,8 +20,8 @@ _start:
 
     csrr    t0, mhartid       # Read core ID into t0
     li      t1, BSP           # Load BSP value (0) into t1
-    bne     t0, t1, 5f        # If not BSP, jump to infinite loop (5:)
-    bne     t0, t1, 4f        # If not BSP, jump to waiting logic (4:)
+    bne     t0, t1, 5f        # If not BSP, jump to infinite loop (5:) Comment this line out when testing with multicore
+    bne     t0, t1, 4f        # If not BSP, jump to BSP initialization (4:)
 
 .option push
 .option norelax
@@ -44,7 +44,7 @@ _start:
     li      t0, 0x10000       # Stack size per core (64 KB)
     csrr    a0, mhartid       # Get core ID
     mul     t0, t0, a0        # Offset = core_id * stack size
-    sub     sp, sp, t0        # Allocate per-core stack
+    sub     sp, sp, t0        # Allocate per-core stack for BSP
 
     # Set mstatus: MPP = Machine mode, FS = enabled
     li      t0, (0b11 << 11) | (0b11 << 13)
@@ -65,23 +65,26 @@ _start:
     li      t0, 7 | (1 << 3)  # RWX permissions
     csrw    pmpcfg0, t0
 
-    # Jump to kernel in S-mode via mret
-    la      ra, 3f            # Fallthrough label if needed
+    # Jump to eh_func_kinit() in M-mode via mret
+    la      ra, 3f            # Update return address after eh_func_kinit() finish
     mret
 
 3:
-    csrr    a0, mhartid       # Read core ID (shouldn't get here)
-    mret                      # Return to mepc again
+    # Jump to eh_func_kmain() in S-mode via mret
+    csrr    a0, mhartid       # Read core ID
+    mret                      # Jump to eh_func_kmain()
 
 
 # Non-BSP CPUs enter here:
 4:
+    # Allocate stack space for Non-BSP
     la      sp, _stack_start
     li      t0, 0x10000
     csrr    a0, mhartid
     mul     t0, t0, a0
     sub     sp, sp, t0
 
+    # Non-BSP early blocking
     li      t1, 1
     sll     t1, t1, a0        # t1 = 1 << core_id
 
@@ -107,10 +110,10 @@ _start:
     csrw    pmpcfg0, t0
 
     la      ra, 6f
-    mret                      # Jump to non-BSP kernel init
+    mret                      # Jump to eh_func_kinit_nobsp()
 
 6:
-    mret                      # Backup return
+    mret                      # Jump to eh_func_kmain_nobsp()
 
 # All non-BSP cores jump here if disabled
 5:

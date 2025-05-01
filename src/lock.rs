@@ -40,7 +40,7 @@ impl IntControl for Critical_Area {
     fn cli() -> usize {
         let cpuid = which_cpu();
 
-        assert_eq!(cpuid, 0);
+        // assert_eq!(cpuid, 0);
 
         let current_mode = get_cpu_mode(cpuid);
         
@@ -53,7 +53,7 @@ impl IntControl for Critical_Area {
 
     fn sti(prev_xie: usize) {
         let cpuid = which_cpu();
-        assert_eq!(cpuid, 0);
+        // assert_eq!(cpuid, 0);
 
         let current_mode = get_cpu_mode(cpuid);
 
