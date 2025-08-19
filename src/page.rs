@@ -256,8 +256,7 @@ impl naive_allocator {
         }
         let rawpt_mapbegin = self.map_begin as *mut pgalloc_mark;
 
-        let map_arr =
-            unsafe { core::slice::from_raw_parts(rawpt_mapbegin.add(map_off), page_cnt) };
+        let map_arr = unsafe { core::slice::from_raw_parts(rawpt_mapbegin.add(map_off), page_cnt) };
 
         for (reg_cnt, reg) in map_arr.iter().enumerate() {
             if let pgalloc_flags::TAKEN = reg.flags {

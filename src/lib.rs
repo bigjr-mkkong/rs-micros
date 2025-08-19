@@ -144,7 +144,7 @@ extern "C" fn eh_func_kinit_nobsp() -> usize {
             );
             abort()
         }
-        Ok(v) => v
+        Ok(v) => v,
     }
 }
 
@@ -513,7 +513,7 @@ fn kmain(current_cpu: usize) -> Result<(), KError> {
         // let mut pcb_second: task_struct = task_struct::new();
         let sched_cpu = which_cpu();
 
-        KTHREAD_POOL.spawn(KHello_task0 as usize, task_flag::NORMAL, sched_cpu)?;
+        // KTHREAD_POOL.spawn(KHello_task0 as usize, task_flag::NORMAL, sched_cpu)?;
         // KTHREAD_POOL.spawn(KHello_task1 as usize, task_flag::NORMAL, sched_cpu)?;
         // KTHREAD_POOL.spawn(ksem_test0 as usize, task_flag::NORMAL, sched_cpu)?;
         KTHREAD_POOL.spawn(ktask_extint as usize, task_flag::CRITICAL, sched_cpu)?;

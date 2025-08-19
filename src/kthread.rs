@@ -19,12 +19,12 @@ use crate::zone::{kfree_page, kmalloc_page, zone_type};
 use crate::IRQ_BUFFER;
 use crate::KERNEL_TRAP_FRAME;
 use crate::KTHREAD_POOL;
+use crate::{Mprintln, Sprintln};
 use crate::{M_UART, S_UART};
 use cbitmap::bitmap::*;
 use core::cell::UnsafeCell;
 use core::hash::*;
 use riscv::register::{mstatus, sstatus};
-use crate::{Mprintln, Sprintln};
 
 pub const MAX_KTHREADS: usize = 256;
 pub const INVAL_KTHREADS_PID: usize = MAX_KTHREADS + 10;
@@ -330,6 +330,7 @@ pub struct task_pool {
     crit_task_intstate: [usize; MAX_HARTS],
     pidmap: Option<spin_mutex<Bitmap<{ (MAX_KTASK / 8) + 1 }>, S_lock>>,
     pub sems: [Option<Vec<kt_semaphore>>; MAX_HARTS],
+    is_init_sched: [bool; MAX_HARTS],
     life_id: spin_mutex<usize, S_lock>,
 }
 
@@ -345,6 +346,7 @@ impl task_pool {
             pidmap: None,
             sems: [None, None, None, None],
             life_id: spin_mutex::<usize, S_lock>::new(1),
+            is_init_sched: [true, true, true, true],
         }
     }
 
@@ -353,7 +355,7 @@ impl task_pool {
             for (i, mut e) in self.POOL.iter_mut().enumerate() {
                 *e = Some(Box::new(Vec::new()));
             }
-            
+
             for fallbacker in self.fallback_task.iter_mut() {
                 let mut fallb = task_struct::new();
                 fallb.init(ktask_fallback as usize, task_flag::NORMAL);
@@ -430,7 +432,9 @@ impl task_pool {
     }
 
     pub fn save_from_ktrapframe(&mut self, cpuid: usize) -> Result<(), KError> {
-        if let (Some(cur_taskidx), Some(ref mut taskvec)) = (self.current_task[cpuid], &mut self.POOL[cpuid]) {
+        if let (Some(cur_taskidx), Some(ref mut taskvec)) =
+            (self.current_task[cpuid], &mut self.POOL[cpuid])
+        {
             taskvec[cur_taskidx].save();
             Ok(())
         } else {
@@ -453,13 +457,15 @@ impl task_pool {
     }
 
     pub fn set_current_state(&mut self, cpuid: usize, new_state: task_state) -> Result<(), KError> {
-        if let (Some(cur_taskidx), Some(ref mut taskvec)) = (self.current_task[cpuid], &mut self.POOL[cpuid]) {
+        if let (Some(cur_taskidx), Some(ref mut taskvec)) =
+            (self.current_task[cpuid], &mut self.POOL[cpuid])
+        {
             taskvec[cur_taskidx].set_state(new_state);
             Ok(())
         } else {
             Err(new_kerror!(KErrorType::EINVAL))
         }
-        
+
         // if let Some(cur_taskidx) = self.current_task[cpuid] {
         //     match self.POOL[cpuid] {
         //         Some(ref mut taskvec) => {
@@ -476,7 +482,9 @@ impl task_pool {
     }
 
     pub fn set_currentPC(&mut self, cpuid: usize, newpc: usize) -> Result<(), KError> {
-        if let (Some(cur_taskidx), Some(ref mut taskvec)) = (self.current_task[cpuid], &mut self.POOL[cpuid]) {
+        if let (Some(cur_taskidx), Some(ref mut taskvec)) =
+            (self.current_task[cpuid], &mut self.POOL[cpuid])
+        {
             taskvec[cur_taskidx].set_pc(newpc);
             Ok(())
         } else {
@@ -503,12 +511,14 @@ impl task_pool {
     }
 
     pub fn get_current_fg(&self, cpuid: usize) -> Result<task_flag, KError> {
-        if let (Some(cur_taskidx), Some(ref taskvec)) = (self.current_task[cpuid], &self.POOL[cpuid]) {
+        if let (Some(cur_taskidx), Some(ref taskvec)) =
+            (self.current_task[cpuid], &self.POOL[cpuid])
+        {
             Ok(taskvec[cur_taskidx].flag)
         } else {
             Err(new_kerror!(KErrorType::EINVAL))
         }
-        
+
         // if let Some(cur_taskidx) = self.current_task[cpuid] {
         //     match self.POOL[cpuid] {
         //         Some(ref taskvec) => Ok(taskvec[cur_taskidx].flag),
@@ -522,12 +532,14 @@ impl task_pool {
     }
 
     pub fn get_current_pid(&self, cpuid: usize) -> Result<usize, KError> {
-        if let (Some(cur_taskidx), Some(ref taskvec)) = (self.current_task[cpuid], &self.POOL[cpuid]) {
+        if let (Some(cur_taskidx), Some(ref taskvec)) =
+            (self.current_task[cpuid], &self.POOL[cpuid])
+        {
             Ok(taskvec[cur_taskidx].pid)
         } else {
             Err(new_kerror!(KErrorType::EINVAL))
         }
-        
+
         // if let Some(cur_taskidx) = self.current_task[cpuid] {
         //     match self.POOL[cpuid] {
         //         Some(ref taskvec) => Ok(taskvec[cur_taskidx].pid),
@@ -541,12 +553,14 @@ impl task_pool {
     }
 
     pub fn get_current_lifeid(&self, cpuid: usize) -> Result<usize, KError> {
-        if let (Some(cur_taskidx), Some(ref taskvec)) = (self.current_task[cpuid], &self.POOL[cpuid]) {
+        if let (Some(cur_taskidx), Some(ref taskvec)) =
+            (self.current_task[cpuid], &self.POOL[cpuid])
+        {
             Ok(taskvec[cur_taskidx].life_id)
         } else {
             Err(new_kerror!(KErrorType::EINVAL))
         }
-        
+
         // if let Some(cur_taskidx) = self.current_task[cpuid] {
         //     match self.POOL[cpuid] {
         //         Some(ref taskvec) => Ok(taskvec[cur_taskidx].life_id),
@@ -652,9 +666,9 @@ impl task_pool {
                 //this is a bug to fix for line 655
                 Some(ref mut taskvec) => {
                     if live_cnt == 0 {
-                        taskvec.clear();
-                        self.current_task = [Some(0), Some(0), Some(0), Some(0)];
-                        self.next_task = [Some(0), Some(0), Some(0), Some(0)];
+                        // taskvec.clear();
+                        // self.current_task = [Some(0), Some(0), Some(0), Some(0)];
+                        // self.next_task = [Some(0), Some(0), Some(0), Some(0)];
                         return Ok(());
                     }
 

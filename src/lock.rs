@@ -43,9 +43,9 @@ impl IntControl for Critical_Area {
         // assert_eq!(cpuid, 0);
 
         let current_mode = get_cpu_mode(cpuid);
-        
+
         if !(current_mode == Mode::Machine || current_mode == Mode::Machine_IRH) {
-           trapping(S2Mop::CLI, None);
+            trapping(S2Mop::CLI, None);
         }
 
         0

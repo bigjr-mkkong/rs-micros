@@ -10,7 +10,9 @@ use crate::lock::{Critical_Area, M_lock, S_lock};
 use crate::new_kerror;
 use crate::task_struct;
 use crate::which_cpu;
+use crate::Mprintln;
 use crate::KTHREAD_POOL;
+use crate::{M_UART, S_UART};
 
 // (pid, lifeid)
 pub struct kt_semaphore {

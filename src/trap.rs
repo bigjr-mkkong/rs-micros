@@ -238,6 +238,7 @@ fn ecall_handler(pc_ret: usize, hart: usize) {
                 KTHREAD_POOL.save_from_ktrapframe(hart);
                 KTHREAD_POOL.set_currentPC(hart, pc_ret + 4);
                 KTHREAD_POOL.sched(hart);
+                KTHREAD_POOL.fallback(hart);
             }
             S2Mop::EXIT => {
                 KTHREAD_POOL.remove_cur_task(hart);
@@ -261,6 +262,7 @@ fn ecall_handler(pc_ret: usize, hart: usize) {
                 KTHREAD_POOL.set_state_by_pid(target_pid, target_lifeid, task_state::Block);
 
                 KTHREAD_POOL.sched(hart);
+                KTHREAD_POOL.fallback(hart);
             }
             S2Mop::UNBLOCK => {
                 let args = SECALL_FRAME[hart].get_args();
