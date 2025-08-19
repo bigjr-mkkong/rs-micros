@@ -21,7 +21,7 @@ pub extern "C" fn KHello_task0() {
     loop {
         busy_delay(1);
 
-        Sprintln!("Hello from KHello_task0(pid: {}) from CPU#{}", pid, cpuid);
+        // Sprintln!("Hello from KHello_task0(pid: {}) from CPU#{}", pid, cpuid);
         trapping(S2Mop::YIELD, None);
     }
 }

@@ -24,6 +24,7 @@ use cbitmap::bitmap::*;
 use core::cell::UnsafeCell;
 use core::hash::*;
 use riscv::register::{mstatus, sstatus};
+use crate::{Mprintln, Sprintln};
 
 pub const MAX_KTHREADS: usize = 256;
 pub const INVAL_KTHREADS_PID: usize = MAX_KTHREADS + 10;
@@ -320,7 +321,6 @@ impl task_struct {
     }
 }
 
-//TODO
 pub struct task_pool {
     POOL: [Option<Box<Vec<task_struct>>>; MAX_HARTS],
     onlline_cpu_cnt: usize,
@@ -408,7 +408,13 @@ impl task_pool {
                             task_state::Running => {
                                 break 'state_check;
                             }
-                            _ => {}
+                            task_state::Block => {
+                                break 'state_check;
+                            }
+                            _ => {
+                                Mprintln!("generate_next: unknown state");
+                                return Err(new_kerror!(KErrorType::EFAULT));
+                            }
                         }
                     } else {
                         return Err(new_kerror!(KErrorType::EFAULT));
@@ -615,6 +621,7 @@ impl task_pool {
     }
 
     pub fn fallback(&mut self, cpuid: usize) -> Result<(), KError> {
+        Mprintln!("Entered ksched fallbacker");
         match self.fallback_task[cpuid] {
             Some(ref mut fallbacker) => {
                 let current_mode = get_cpu_mode(cpuid);
@@ -639,6 +646,10 @@ impl task_pool {
 
         if let Some(cur_taskidx) = self.current_task[cpuid] {
             match self.POOL[cpuid] {
+                //TODO
+                //live_cnt will becomes 0 when all tasks are "blocked"
+                //in this case we should not clear the whole taskvec
+                //this is a bug to fix for line 655
                 Some(ref mut taskvec) => {
                     if live_cnt == 0 {
                         taskvec.clear();

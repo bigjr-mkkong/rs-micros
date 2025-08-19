@@ -514,7 +514,7 @@ fn kmain(current_cpu: usize) -> Result<(), KError> {
         let sched_cpu = which_cpu();
 
         KTHREAD_POOL.spawn(KHello_task0 as usize, task_flag::NORMAL, sched_cpu)?;
-        KTHREAD_POOL.spawn(KHello_task1 as usize, task_flag::NORMAL, sched_cpu)?;
+        // KTHREAD_POOL.spawn(KHello_task1 as usize, task_flag::NORMAL, sched_cpu)?;
         // KTHREAD_POOL.spawn(ksem_test0 as usize, task_flag::NORMAL, sched_cpu)?;
         KTHREAD_POOL.spawn(ktask_extint as usize, task_flag::CRITICAL, sched_cpu)?;
         KTHREAD_POOL.join_all_ktask(sched_cpu);
