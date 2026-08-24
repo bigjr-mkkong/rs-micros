@@ -116,8 +116,17 @@ impl task_struct {
         self.life_id = new_lifeid;
     }
     pub fn init(&mut self, func: usize, new_flag: task_flag) -> Result<usize, KError> {
-        self.cpu = which_cpu();
-        self.trap_frame.cpuid = self.cpu;
+        self.init_on_cpu(func, new_flag, which_cpu())
+    }
+
+    fn init_on_cpu(
+        &mut self,
+        func: usize,
+        new_flag: task_flag,
+        cpuid: usize,
+    ) -> Result<usize, KError> {
+        self.cpu = cpuid;
+        self.trap_frame.cpuid = cpuid;
         self.state = task_state::Ready;
         self.flag = new_flag;
         if let task_typ::KERN = self.typ {
@@ -191,7 +200,7 @@ impl task_struct {
                 }
             }
             let tasktrap_addr = &self.trap_frame as *const TrapFrame;
-            let task_s1val = KERNEL_TRAP_FRAME[self.cpu].regs[8];
+            let task_s1val = self.trap_frame.regs[9];
 
             sscratch_write(tasktrap_addr as usize);
 
@@ -209,6 +218,11 @@ impl task_struct {
              */
             asm!("csrw  stval, {0}", in(reg) task_s1val);
             asm!("mv   s1, {0}", in(reg) tasktrap_addr );
+
+            // Restore address translation while s1 still points at the frame.
+            // t0 is restored from the frame immediately afterwards.
+            asm!("ld      t0, 64 * 8(s1)");
+            asm!("csrw    satp, t0");
 
             asm!("ld      x0,  0   * 8(s1)");
             asm!("ld      x1,  1   * 8(s1)");
@@ -241,9 +255,6 @@ impl task_struct {
             asm!("ld      x29, 29  * 8(s1)");
             asm!("ld      x30, 30  * 8(s1)");
             asm!("ld      x31, 31  * 8(s1)");
-            //load back satp value
-            asm!("ld      x9, 31 * 8(s1)");
-            asm!("csrw      satp, s1");
 
             asm!("csrrw   s1, stval, s1");
 
@@ -264,7 +275,7 @@ impl task_struct {
                 }
             }
             let tasktrap_addr = &self.trap_frame as *const TrapFrame;
-            let task_s1val = KERNEL_TRAP_FRAME[self.cpu].regs[8];
+            let task_s1val = self.trap_frame.regs[9];
 
             sscratch_write(tasktrap_addr as usize);
 
@@ -276,6 +287,11 @@ impl task_struct {
              */
             asm!("csrw  stval, {0}", in(reg) task_s1val);
             asm!("mv   s1, {0}", in(reg) tasktrap_addr );
+
+            // Restore address translation while s1 still points at the frame.
+            // t0 is restored from the frame immediately afterwards.
+            asm!("ld      t0, 64 * 8(s1)");
+            asm!("csrw    satp, t0");
 
             asm!("ld      x0,  0   * 8(s1)");
             asm!("ld      x1,  1   * 8(s1)");
@@ -308,9 +324,6 @@ impl task_struct {
             asm!("ld      x29, 29  * 8(s1)");
             asm!("ld      x30, 30  * 8(s1)");
             asm!("ld      x31, 31  * 8(s1)");
-            //load back satp value
-            asm!("ld      x9, 64 * 8(s1)");
-            asm!("csrw      satp, s1");
 
             asm!("csrrw   s1, stval, s1");
 
@@ -331,6 +344,7 @@ pub struct task_pool {
     pidmap: Option<spin_mutex<Bitmap<{ (MAX_KTASK / 8) + 1 }>, S_lock>>,
     pub sems: [Option<Vec<kt_semaphore>>; MAX_HARTS],
     is_init_sched: [bool; MAX_HARTS],
+    in_fallback: [bool; MAX_HARTS],
     life_id: spin_mutex<usize, S_lock>,
 }
 
@@ -347,24 +361,24 @@ impl task_pool {
             sems: [None, None, None, None],
             life_id: spin_mutex::<usize, S_lock>::new(1),
             is_init_sched: [true, true, true, true],
+            in_fallback: [false, false, false, false],
         }
     }
 
-    pub fn init(&mut self, cpucnt: usize) {
-        for cpuid in 0..cpucnt {
-            for (i, mut e) in self.POOL.iter_mut().enumerate() {
-                *e = Some(Box::new(Vec::new()));
-            }
+    pub fn init(&mut self, cpucnt: usize) -> Result<(), KError> {
+        self.pidmap = Some(spin_mutex::new(Bitmap::new()));
 
-            for fallbacker in self.fallback_task.iter_mut() {
-                let mut fallb = task_struct::new();
-                fallb.init(ktask_fallback as usize, task_flag::NORMAL);
-                *fallbacker = Some(Box::new(fallb));
-            }
+        for cpuid in 0..cpucnt {
+            self.POOL[cpuid] = Some(Box::new(Vec::new()));
+
+            let mut fallb = task_struct::new();
+            fallb.init_on_cpu(ktask_fallback as usize, task_flag::NORMAL, cpuid)?;
+            self.fallback_task[cpuid] = Some(Box::new(fallb));
             self.next_task[cpuid] = Some(0);
             self.current_task[cpuid] = Some(0);
-            self.pidmap = Some(spin_mutex::new(Bitmap::new()));
         }
+
+        Ok(())
     }
 
     fn get_new_pid(&mut self) -> usize {
@@ -391,44 +405,22 @@ impl task_pool {
         let taskq = self.POOL[cpuid]
             .as_ref()
             .expect("Failed to take reference of task queue");
-        match self.next_task[cpuid] {
-            Some(ref mut next_ent) => 'state_check: loop {
-                let tmp = *next_ent;
-                let taskqlen = taskq.len();
+        let taskqlen = taskq.len();
+        if taskqlen == 0 {
+            return Err(new_kerror!(KErrorType::EINVAL));
+        }
 
-                if taskqlen == 0 {
-                    *next_ent = 0;
-                    break;
-                } else {
-                    *next_ent = (tmp + 1) % taskq.len();
-                    if let Some(ref taskvec) = self.POOL[cpuid] {
-                        let next_state = taskvec[*next_ent].get_state();
-                        match next_state {
-                            task_state::Ready => {
-                                break 'state_check;
-                            }
-                            task_state::Running => {
-                                break 'state_check;
-                            }
-                            task_state::Block => {
-                                break 'state_check;
-                            }
-                            _ => {
-                                Mprintln!("generate_next: unknown state");
-                                return Err(new_kerror!(KErrorType::EFAULT));
-                            }
-                        }
-                    } else {
-                        return Err(new_kerror!(KErrorType::EFAULT));
-                    }
-                }
-            },
-            None => {
-                return Err(new_kerror!(KErrorType::EFAULT));
+        let next_ent = self.next_task[cpuid].ok_or(new_kerror!(KErrorType::EFAULT))?;
+        for offset in 1..=taskqlen {
+            let candidate = (next_ent + offset) % taskqlen;
+            let next_state = taskq[candidate].get_state();
+            if matches!(next_state, task_state::Ready | task_state::Running) {
+                self.next_task[cpuid] = Some(candidate);
+                return Ok(());
             }
         }
 
-        Ok(())
+        Err(new_kerror!(KErrorType::EINVAL))
     }
 
     pub fn save_from_ktrapframe(&mut self, cpuid: usize) -> Result<(), KError> {
@@ -635,7 +627,7 @@ impl task_pool {
     }
 
     pub fn fallback(&mut self, cpuid: usize) -> Result<(), KError> {
-        Mprintln!("Entered ksched fallbacker");
+        self.in_fallback[cpuid] = true;
         match self.fallback_task[cpuid] {
             Some(ref mut fallbacker) => {
                 let current_mode = get_cpu_mode(cpuid);
@@ -653,8 +645,16 @@ impl task_pool {
         }
     }
 
+    pub fn is_in_fallback(&self, cpuid: usize) -> bool {
+        self.in_fallback[cpuid]
+    }
+
     pub fn sched(&mut self, cpuid: usize) -> Result<(), KError> {
         let live_cnt = self.get_scheduable_cnt(cpuid);
+        if live_cnt == 0 {
+            return Ok(());
+        }
+
         self.generate_next(cpuid)?;
         self.current_task[cpuid] = self.next_task[cpuid];
 
@@ -665,12 +665,7 @@ impl task_pool {
                 //in this case we should not clear the whole taskvec
                 //this is a bug to fix for line 655
                 Some(ref mut taskvec) => {
-                    if live_cnt == 0 {
-                        // taskvec.clear();
-                        // self.current_task = [Some(0), Some(0), Some(0), Some(0)];
-                        // self.next_task = [Some(0), Some(0), Some(0), Some(0)];
-                        return Ok(());
-                    }
+                    self.in_fallback[cpuid] = false;
 
                     let current_mode = get_cpu_mode(cpuid);
                     if matches!(current_mode, Mode::Machine | Mode::Machine_IRH) {

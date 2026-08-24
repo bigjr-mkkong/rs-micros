@@ -146,8 +146,11 @@ extern "C" fn m_trap(
                 cdump_flag = true;
             }
             3 => {
-                // Mprintln!("Breakpoint Trap at CPU#{}\n", hart);
-                pc_ret += 4;
+                // C.EBREAK is a 16-bit instruction while EBREAK is 32-bit.
+                // Advancing by four unconditionally skips the instruction
+                // following C.EBREAK and corrupts the resumed control flow.
+                let instruction = unsafe { (xepc as *const u16).read_volatile() };
+                pc_ret += if instruction & 0b11 == 0b11 { 4 } else { 2 };
             }
             4 => {
                 Mprintln!("Load Address Misaligned at CPU#{}\n", hart);
@@ -235,8 +238,12 @@ fn ecall_handler(pc_ret: usize, hart: usize) {
                     let prev_mie = KTHREAD_POOL.get_crit_task_mie();
                     M_sti(prev_mie[hart]);
                 }
-                KTHREAD_POOL.save_from_ktrapframe(hart);
-                KTHREAD_POOL.set_currentPC(hart, pc_ret + 4);
+                // The fallback context is not a member of the task pool.  Do
+                // not overwrite the blocked task's saved frame with it.
+                if !KTHREAD_POOL.is_in_fallback(hart) {
+                    KTHREAD_POOL.save_from_ktrapframe(hart);
+                    KTHREAD_POOL.set_currentPC(hart, pc_ret + 4);
+                }
                 KTHREAD_POOL.sched(hart);
                 KTHREAD_POOL.fallback(hart);
             }
@@ -250,16 +257,8 @@ fn ecall_handler(pc_ret: usize, hart: usize) {
                     let prev_mie = KTHREAD_POOL.get_crit_task_mie();
                     M_sti(prev_mie[hart]);
                 }
-                let args = SECALL_FRAME[hart].get_args();
-                let target_pid = args[0];
-                let target_lifeid = args[1];
-                assert_ne!(target_pid, INVAL_KTHREADS_PID);
-                assert_ne!(target_lifeid, 0);
-
                 KTHREAD_POOL.save_from_ktrapframe(hart);
                 KTHREAD_POOL.set_currentPC(hart, pc_ret + 4);
-
-                KTHREAD_POOL.set_state_by_pid(target_pid, target_lifeid, task_state::Block);
 
                 KTHREAD_POOL.sched(hart);
                 KTHREAD_POOL.fallback(hart);

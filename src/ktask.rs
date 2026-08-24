@@ -1,60 +1,15 @@
-use crate::asm;
-use crate::cpu::{
-    busy_delay, get_cpu_mode, make_satp, mepc_read, mepc_write, satp_read, satp_write,
-    sscratch_write, which_cpu, Mode, SATP_mode, TrapFrame, MAX_HARTS,
-};
+use crate::cpu::{busy_delay, which_cpu};
 use crate::ecall::{trapping, S2Mop};
-use crate::kthread::get_ktpid_lifeid;
-use crate::kthread::INVAL_KTHREADS_PID;
 use crate::sem_uart;
 use crate::IRQ_BUFFER;
-use crate::{Mprintln, Sprintln};
-use crate::{M_UART, S_UART};
-use alloc::vec::Vec;
+use crate::{Sprintln, S_UART};
 
 #[no_mangle]
-pub extern "C" fn KHello_task0() {
-    let cpuid = which_cpu();
-    let (pid, lifeid): (usize, usize) = get_ktpid_lifeid(cpuid).unwrap_or((INVAL_KTHREADS_PID, 0));
-    assert_ne!(pid, INVAL_KTHREADS_PID);
-    assert_ne!(lifeid, 0);
+pub extern "C" fn ktask_idle() {
     loop {
         busy_delay(1);
-
-        // Sprintln!("Hello from KHello_task0(pid: {}) from CPU#{}", pid, cpuid);
-        trapping(S2Mop::YIELD, None);
+        let _ = trapping(S2Mop::YIELD, None);
     }
-}
-
-#[no_mangle]
-pub extern "C" fn KHello_task1() {
-    let cpuid = which_cpu();
-    let (pid, lifeid): (usize, usize) = get_ktpid_lifeid(cpuid).unwrap_or((INVAL_KTHREADS_PID, 0));
-    assert_ne!(pid, INVAL_KTHREADS_PID);
-    assert_ne!(lifeid, 0);
-    loop {
-        busy_delay(1);
-
-        Sprintln!("Hello from KHello_task1(pid: {}) from CPU#{}", pid, cpuid);
-        trapping(S2Mop::YIELD, None);
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn ksem_test0() {
-    let cpuid = which_cpu();
-    let (pid, lifeid): (usize, usize) = get_ktpid_lifeid(cpuid).unwrap_or((INVAL_KTHREADS_PID, 0));
-    assert_ne!(pid, INVAL_KTHREADS_PID);
-    assert_ne!(lifeid, 0);
-    unsafe {
-        loop {
-            Sprintln!("sem blocked on task#{}", pid);
-            sem_uart.wait();
-            Sprintln!("sem unblocked");
-            trapping(S2Mop::YIELD, None);
-        }
-    }
-    trapping(S2Mop::EXIT, None);
 }
 
 #[no_mangle]
@@ -104,10 +59,6 @@ pub extern "C" fn ktask_extint() {
 
 #[no_mangle]
 pub extern "C" fn ktask_fallback() {
-    Sprintln!(
-        "CPU#{} at ktask fallbacker, trying to yield...",
-        which_cpu()
-    );
     trapping(S2Mop::YIELD, None);
 }
 

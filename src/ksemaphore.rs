@@ -38,11 +38,21 @@ impl kt_semaphore {
         let mut cnt = self.cnt.lock();
         *cnt -= 1;
         if *cnt < 0 {
+            // Publish the blocked state while holding cnt. A signaler cannot
+            // pass us until both the state and wait-queue entry are visible.
+            // Marking the task blocked later in the BLOCK ecall allowed a
+            // signal to wake it first and then have BLOCK overwrite Ready.
+            unsafe {
+                KTHREAD_POOL
+                    .set_current_state(cpuid, task_state::Block)
+                    .unwrap_or_else(|_| panic!("failed to block semaphore waiter"));
+            }
+
             let mut wait_q = self.wait_q.lock();
             wait_q.push((pid, lifeid));
             drop(cnt);
             drop(wait_q);
-            trapping(S2Mop::BLOCK, Some(&[pid, lifeid, 0, 0, 0]));
+            trapping(S2Mop::BLOCK, None);
         } else {
             drop(cnt);
         }

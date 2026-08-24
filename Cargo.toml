@@ -2,9 +2,13 @@
 name = "rs-micros"
 version = "0.1.0"
 edition = "2021"
+autotests = false
 
 [lib]
 crate-type = ["staticlib"]
+
+[features]
+multicore-test = []
 
 [dependencies]
 paste = "1.0"

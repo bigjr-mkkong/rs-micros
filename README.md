@@ -1,30 +1,64 @@
 ## What is it
-(Will be) A minix like riscv64gc micro kernel implementation, which build from ground-up(no SBI) and just for fun reason
+
+A Minix-like `riscv64gc` microkernel built from the ground up, without an SBI.
 
 ## How to run
-First you need to configure your local rust toolchain by running following commands:
+
+The build requires:
+
+- a current Rust nightly toolchain with the bare-metal RISC-V target;
+- a `riscv64-linux-gnu-` GCC/binutils cross toolchain; and
+- `qemu-system-riscv64`.
+
+Configure Rust with:
+
 ```
 rustup default nightly
 rustup target add riscv64gc-unknown-none-elf
-cargo install cargo-binutils
 ```
-Then, make sure gcc riscv64 cross compiler toolchain and qemu riscv64 are installed. After that execute
+
+Then build and boot the kernel with:
 
 ```
 make run
 ```
 
-to compile & build & boot kernel into qemu.
+The kernel boots four harts directly in QEMU's `virt` machine, switches them to
+S-mode, starts their schedulers, and waits for UART input on hart 0. Type a
+character to exercise the UART interrupt and semaphore wakeup path. Press
+`Ctrl-a`, then `x`, to quit QEMU.
 
-Also, you may need to change $(PREFIX) variable if your toolchain is different from the default one 
+If the cross-toolchain uses a different prefix, override it on the command line,
+for example `make PREFIX=riscv64-unknown-elf- run`.
 
-You can also run `make all` to just build binary into elf file or `make bitstream` to build raw bitstream
+Run `make all` to produce `os.elf`, or `make bitstream` to additionally produce
+the raw `os.bin` image.
+
+## Multicore ktask and semaphore test
+
+Run the automated four-hart stress test with:
+
+```
+make test-multicore
+```
+
+The test runs two yielding ktasks per hart for 128 total scheduler records, then
+passes 64 signals through a shared kernel semaphore, with each hart consuming
+16 wakeups. Every record is printed through `Sprintln!`; the host validates the
+per-hart distribution and checks that all 128 ktask records and all 64 semaphore
+records are complete, non-interleaved lines. QEMU exits automatically when both
+phases pass.
+
 ## How to debug
-Run
+
+Run:
+
 ```
 make debug
 ```
-To hang qemu before receive gdb client connection
+
+QEMU will wait for a GDB connection on TCP port 1234 before executing the first
+instruction.
 
 ## Current Progress
   - [x] Kernel Loader

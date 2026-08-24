@@ -18,15 +18,14 @@ _start:
 
     csrw    satp, zero        # Disable virtual memory translation (SATP = 0)
 
-    csrr    t0, mhartid       # Read core ID into t0
-    li      t1, BSP           # Load BSP value (0) into t1
-    bne     t0, t1, 5f        # If not BSP, jump to infinite loop (5:) Comment this line out when testing with multicore
-    bne     t0, t1, 4f        # If not BSP, jump to BSP initialization (4:)
-
 .option push
 .option norelax
-    la      gp, _global_pointer # Set global pointer (GP) to _global_pointer
+    la      gp, _global_pointer # Set GP before either BSP or secondary Rust code runs
 .option pop
+
+    csrr    t0, mhartid       # Read core ID into t0
+    li      t1, BSP           # Load BSP value (0) into t1
+    bne     t0, t1, 4f        # Secondary harts wait for BSP initialization at 4:
 
     # Clear .bss section
     la      a0, _bss_start    # Load BSS start address
@@ -60,9 +59,12 @@ _start:
     la      t2, s_trap_vector
     csrw    stvec, t2
 
-    # Setup PMP for unrestricted access
-    csrw    pmpaddr0, zero
-    li      t0, 7 | (1 << 3)  # RWX permissions
+    # Give S-mode access to the full physical address space.  A TOR entry with
+    # pmpaddr0 == 0 describes an empty range, so the old setup denied every
+    # S-mode access as soon as mret left M-mode.
+    li      t0, -1
+    csrw    pmpaddr0, t0
+    li      t0, 7 | (1 << 3)  # TOR, RWX permissions
     csrw    pmpcfg0, t0
 
     # Jump to eh_func_kinit() in M-mode via mret
@@ -92,6 +94,7 @@ _start:
     ld      t2, cpu_early_block
     and     t2, t2, t1        # Check if BSP set our bit
     beqz    t2, 7b            # Loop until it’s set
+    fence   r, rw              # Acquire BSP page-table and scheduler initialization
 
     # Set trap vectors
     la      t2, m_trap_vector
@@ -105,8 +108,9 @@ _start:
     la      t1, eh_func_kinit_nobsp
     csrw    mepc, t1
 
-    csrw    pmpaddr0, zero
-    li      t0, 7 | (1 << 3)
+    li      t0, -1
+    csrw    pmpaddr0, t0
+    li      t0, 7 | (1 << 3)  # TOR, RWX permissions
     csrw    pmpcfg0, t0
 
     la      ra, 6f
@@ -114,8 +118,3 @@ _start:
 
 6:
     mret                      # Jump to eh_func_kmain_nobsp()
-
-# All non-BSP cores jump here if disabled
-5:
-    nop
-    j       5b                # Infinite loop (core parked)

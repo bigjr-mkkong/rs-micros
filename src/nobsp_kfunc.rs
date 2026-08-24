@@ -7,7 +7,7 @@ use spin::Mutex;
 
 use crate::cpu::{which_cpu, SATP_mode, TrapFrame};
 use crate::error::{KError, KErrorType};
-use crate::ktask::{ktask_extint, KHello_task0, KHello_task1};
+use crate::ktask::ktask_idle;
 use crate::kthread::{task_flag, task_struct};
 use crate::lock::spin_mutex;
 use crate::lock::{M_lock, S_lock};
@@ -76,10 +76,16 @@ pub fn kmain() -> Result<(), KError> {
 
         let sched_cpu = which_cpu();
 
-        // KTHREAD_POOL.spawn(KHello_task0 as usize, task_flag::NORMAL, sched_cpu)?;
-        KTHREAD_POOL.spawn(KHello_task1 as usize, task_flag::NORMAL, sched_cpu)?;
-        KTHREAD_POOL.spawn(ktask_extint as usize, task_flag::CRITICAL, sched_cpu)?;
-        KTHREAD_POOL.join_all_ktask(sched_cpu);
+        #[cfg(feature = "multicore-test")]
+        crate::multicore_test::start(sched_cpu, false)?;
+
+        #[cfg(not(feature = "multicore-test"))]
+        {
+            // Keep secondary schedulers active without competing for UART IRQ
+            // requests, which are routed to hart 0.
+            KTHREAD_POOL.spawn(ktask_idle as usize, task_flag::NORMAL, sched_cpu)?;
+            KTHREAD_POOL.join_all_ktask(sched_cpu);
+        }
     }
 
     loop {

@@ -52,7 +52,7 @@ use error::{KError, KErrorType};
 use fdt_parser::Fdt;
 use irq::{int_request, soft_irq_buf};
 use ksemaphore::kt_semaphore;
-use ktask::{ksem_test0, ktask_extint, KHello_task0, KHello_task1};
+use ktask::ktask_extint;
 use kthread::{task_flag, task_pool, task_struct};
 use nobsp_kfunc::kinit as nobsp_kinit;
 use nobsp_kfunc::kmain as nobsp_kmain;
@@ -317,6 +317,14 @@ fn kinit() -> Result<usize, KError> {
 
     //qemu mmio memory mapping according to qemu/hw/riscv/virt.c
 
+    // QEMU test finisher, used by the automated multicore test.
+    ident_range_map(
+        pageroot,
+        0x0010_0000,
+        0x0010_1000,
+        vm::EntryBits::ReadWrite.val(),
+    );
+
     //CLINT
     ident_range_map(
         pageroot,
@@ -453,20 +461,18 @@ fn kinit() -> Result<usize, KError> {
         EXTINT_SRCS[10].set_src_id(10);
         PLIC.set_prio(&EXTINT_SRCS[10], 5)?;
         PLIC.enable(plic_ctx::CORE0_M, &EXTINT_SRCS[10])?;
-        PLIC.enable(plic_ctx::CORE1_M, &EXTINT_SRCS[10])?;
-        PLIC.enable(plic_ctx::CORE2_M, &EXTINT_SRCS[10])?;
-        PLIC.enable(plic_ctx::CORE3_M, &EXTINT_SRCS[10])?;
         mstatus::set_mpp(mstatus::MPP::Supervisor);
     }
 
     unsafe {
-        KTHREAD_POOL.init(cpu::MAX_HARTS);
+        KTHREAD_POOL.init(cpu::MAX_HARTS)?;
     }
     /*
      * Unlock other cores from early spin lock
      */
     unsafe {
         let early_boot: *mut u64 = ptr::addr_of_mut!(cpu_early_block);
+        asm!("fence rw, w");
         early_boot.write_volatile(0xffff_ffff);
     }
 
@@ -513,11 +519,14 @@ fn kmain(current_cpu: usize) -> Result<(), KError> {
         // let mut pcb_second: task_struct = task_struct::new();
         let sched_cpu = which_cpu();
 
-        // KTHREAD_POOL.spawn(KHello_task0 as usize, task_flag::NORMAL, sched_cpu)?;
-        // KTHREAD_POOL.spawn(KHello_task1 as usize, task_flag::NORMAL, sched_cpu)?;
-        // KTHREAD_POOL.spawn(ksem_test0 as usize, task_flag::NORMAL, sched_cpu)?;
-        KTHREAD_POOL.spawn(ktask_extint as usize, task_flag::CRITICAL, sched_cpu)?;
-        KTHREAD_POOL.join_all_ktask(sched_cpu);
+        #[cfg(feature = "multicore-test")]
+        multicore_test::start(sched_cpu, true)?;
+
+        #[cfg(not(feature = "multicore-test"))]
+        {
+            KTHREAD_POOL.spawn(ktask_extint as usize, task_flag::CRITICAL, sched_cpu)?;
+            KTHREAD_POOL.join_all_ktask(sched_cpu);
+        }
     }
 
     loop {
@@ -542,6 +551,9 @@ pub mod ktask_manager;
 pub mod kthread;
 pub mod lock;
 pub mod macros;
+#[cfg(feature = "multicore-test")]
+#[path = "../tests/multicore.rs"]
+mod multicore_test;
 pub mod nobsp_kfunc;
 pub mod page;
 pub mod plic;

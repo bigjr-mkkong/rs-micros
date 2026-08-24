@@ -19,6 +19,7 @@ INCLUDES=
 LINKER_SCRIPT=-Tsrc/lds/virt.lds
 TYPE=debug
 RUST_TARGET=./target/riscv64gc-unknown-none-elf/$(TYPE)
+CARGO_FLAGS?=
 LIBS=-L$(RUST_TARGET)
 SOURCES_ASM=$(wildcard src/asm/*.S)
 KHEAP_MALLOC = src/kheap_malloc/
@@ -38,7 +39,7 @@ BS_OUT=os.bin
 QEMU=qemu-system-riscv64
 MACH=virt
 CPU=rv64
-CPU_CNT=1
+CPU_CNT=4
 MEM=128M
 DRIVE=hdd.dsk
 SERIAL=mon:stdio
@@ -46,8 +47,8 @@ SERIAL=mon:stdio
 # pty can be used to do concurrent debug, it will blast data into uart
 
 all: 
-	cargo build
-	make -C $(KHEAP_MALLOC) all
+	cargo build $(CARGO_FLAGS)
+	$(MAKE) -C $(KHEAP_MALLOC) all
 	$(CC) $(CFLAGS) $(LINKER_SCRIPT) $(INCLUDES) -o $(OUT) $(KHEAP_MALOC_OBJ) $(SOURCES_ASM) $(LIBS) $(LIB)
 	
 run: all dump
@@ -98,14 +99,19 @@ replay: all dump
 		-icount shift=auto,rr=replay,rrfile=replay.bin \
 		-s -S
 
+test-multicore:
+	$(MAKE) CARGO_FLAGS="--features multicore-test" all
+	@QEMU="$(QEMU)" MACH="$(MACH)" CPU="$(CPU)" MEM="$(MEM)" KERNEL="$(OUT)" \
+		sh tests/run-multicore.sh
+
 bitstream: all
 	$(OBJCOPY) -I elf64-littleriscv -O binary $(OUT) $(BS_OUT)
 
 dump: all
 	$(OBJDUMP) -D $(OUT) > dump
 
-.PHONY: clean
+.PHONY: all run debug record replay test-multicore bitstream dump clean
 clean:
 	cargo clean
 	rm -f $(OUT) dump os.bin hdd.dsk replay.bin
-	make -C $(KHEAP_MALLOC) clean
+	$(MAKE) -C $(KHEAP_MALLOC) clean
