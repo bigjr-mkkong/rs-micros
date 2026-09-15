@@ -7,6 +7,13 @@ s_trap_vector:
 # and is safe to access through physical memory
     csrrw   s1, sscratch, s1
 
+    # Preserve t0 before using it to capture the interrupted address space.
+    # The old vector disabled translation before recording satp, so a later
+    # context switch could not reliably restore the interrupted task.
+    sd      x5,  5   * 8(s1)
+    csrr    t0, satp
+    sd      t0, 64   * 8(s1)
+
     # disable memory translation
     csrw    satp, x0 
     sfence.vma
@@ -17,7 +24,6 @@ s_trap_vector:
     sd      x2,  2   * 8(s1)
     sd      x3,  3   * 8(s1)
     sd      x4,  4   * 8(s1)
-    sd      x5,  5   * 8(s1)
     sd      x6,  6   * 8(s1)
     sd      x7,  7   * 8(s1)
     sd      x8,  8   * 8(s1)
@@ -46,7 +52,7 @@ s_trap_vector:
 
 # switch back original s1(x9) value
     csrr    s2, sscratch
-    sd      s2, 8 * 8(s1)
+    sd      s2, 9 * 8(s1)
 
     csrrw   s1, sscratch, s1
     call    which_cpu
@@ -58,7 +64,7 @@ s_trap_vector:
     csrr    a1, stval
     csrr    a2, scause
     csrr    a4, sstatus
-    move    a5, t0
+    move    a5, s1
 
     ld      sp, 65 * 8(s1)
 
@@ -117,13 +123,18 @@ m_trap_vector:
     csrrw   s1, mscratch, s1
     beqz    s1, paniker
 
+    # Save t0 before borrowing it to snapshot satp.  task_struct::save()
+    # copies this kernel frame, including satp, into the outgoing task.
+    sd      x5,  5   * 8(s1)
+    csrr    t0, satp
+    sd      t0, 64   * 8(s1)
+
 # Save GP regs
     sd      x0,  0   * 8(s1)
     sd      x1,  1   * 8(s1)
     sd      x2,  2   * 8(s1)
     sd      x3,  3   * 8(s1)
     sd      x4,  4   * 8(s1)
-    sd      x5,  5   * 8(s1)
     sd      x6,  6   * 8(s1)
     sd      x7,  7   * 8(s1)
     sd      x8,  8   * 8(s1)

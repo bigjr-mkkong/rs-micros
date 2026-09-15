@@ -104,13 +104,18 @@ test-multicore:
 	@QEMU="$(QEMU)" MACH="$(MACH)" CPU="$(CPU)" MEM="$(MEM)" KERNEL="$(OUT)" \
 		sh tests/run-multicore.sh
 
+test-uart-delegation:
+	$(MAKE) CARGO_FLAGS="" all
+	@QEMU="$(QEMU)" MACH="$(MACH)" CPU="$(CPU)" MEM="$(MEM)" KERNEL="$(OUT)" \
+		sh tests/run-delegated-uart.sh
+
 bitstream: all
 	$(OBJCOPY) -I elf64-littleriscv -O binary $(OUT) $(BS_OUT)
 
 dump: all
 	$(OBJDUMP) -D $(OUT) > dump
 
-.PHONY: all run debug record replay test-multicore bitstream dump clean
+.PHONY: all run debug record replay test-multicore test-uart-delegation bitstream dump clean
 clean:
 	cargo clean
 	rm -f $(OUT) dump os.bin hdd.dsk replay.bin

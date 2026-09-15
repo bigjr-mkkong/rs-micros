@@ -55,7 +55,7 @@ if [ "${qemu_status}" -ne 0 ] || \
     [ "${semaphore_records}" -ne 64 ] || \
     [ "${ktask_distribution_ok}" -ne 1 ] || \
     [ "${semaphore_distribution_ok}" -ne 1 ] || \
-    ! grep -q '\[MULTICORE-TEST\] PASS' "${test_log}"; then
+    ! grep -Eq '\[MULTICORE-TEST\] PASS .*machine_timer_ticks=[1-9][0-9]*' "${test_log}"; then
     echo "multicore test failed: qemu_status=${qemu_status} ktask_uart=${ktask_records}/128 semaphore_uart=${semaphore_records}/64"
     exit 1
 fi

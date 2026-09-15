@@ -39,9 +39,10 @@ use core::arch::asm;
 use core::mem::size_of;
 use core::ptr;
 use kmem::init;
-use riscv::register::{medeleg, mideleg, mie, mstatus, sie, sstatus};
+use riscv::register::{mstatus, sie, sstatus};
 use spin::Mutex;
 
+use crate::ktask::ktask_idle;
 use crate::lock::spin_mutex;
 use crate::lock::{Critical_Area, M_lock, S_lock};
 use alloc::vec::Vec;
@@ -438,29 +439,22 @@ fn kinit() -> Result<usize, KError> {
     }
 
     /*
-     * We only delegate ext interrupt and all exception to S-mode
-     *
-     * timer needs to be handled in M-mode since we need access to CLINT, as well as sw interrupt
+     * Runtime faults and external interrupts belong to S-mode. Supervisor
+     * ecalls and the non-delegatable CLINT machine timer remain M-mode
+     * firmware services.
      */
 
     unsafe {
-        CLINT.set_mtimecmp(current_cpu, u64::MAX);
-
-        mie::set_msoft();
-
-        // mie::set_mtimer();
-
-        mie::set_mext();
-        mie::set_sext();
-
-        // mideleg::set_sext();
+        trap::delegate_traps_to_supervisor();
+        trap::enable_machine_timer(current_cpu);
         sie::set_sext();
+        sstatus::set_sie();
         sstatus::set_spie();
 
         EXTINT_SRCS[10].set_name(extint_name::UART0);
         EXTINT_SRCS[10].set_src_id(10);
         PLIC.set_prio(&EXTINT_SRCS[10], 5)?;
-        PLIC.enable(plic_ctx::CORE0_M, &EXTINT_SRCS[10])?;
+        PLIC.set_thres(plic_ctx::CORE0_S, 0)?;
         mstatus::set_mpp(mstatus::MPP::Supervisor);
     }
 
@@ -494,6 +488,11 @@ fn kinit() -> Result<usize, KError> {
 }
 
 fn kmain(current_cpu: usize) -> Result<(), KError> {
+    unsafe {
+        // Initialize the software queue before making the UART source visible
+        // to the S-mode PLIC context.
+        IRQ_BUFFER.init();
+    }
     S_UART.lock().init();
     Sprintln!("CPU#{} Switched to S mode", current_cpu);
 
@@ -501,16 +500,12 @@ fn kmain(current_cpu: usize) -> Result<(), KError> {
         asm!("ebreak");
 
         Sprintln!("CPU{} Back from trap\n", current_cpu);
-        CLINT.set_mtimecmp(current_cpu, CLINT.read_mtime() + 0x500_000);
+        PLIC.enable(plic_ctx::CORE0_S, &EXTINT_SRCS[10])?;
     }
 
     let k = alloc::vec![1, 2, 3, 4, 5];
     for i in k.iter() {
         Sprintln!("{}", i);
-    }
-
-    unsafe {
-        IRQ_BUFFER.init();
     }
 
     Sprintln!("---------->>Start Ktask<<----------");

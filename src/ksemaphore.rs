@@ -58,9 +58,7 @@ impl kt_semaphore {
         }
     }
 
-    pub fn signal(&mut self, hart: Option<usize>) {
-        let cpuid = hart.unwrap_or(INVAL_KTHREADS_PID);
-        assert_ne!(cpuid, INVAL_KTHREADS_PID);
+    fn take_waiter(&mut self) -> Option<(usize, usize)> {
         let mut cnt = self.cnt.lock();
         *cnt += 1;
 
@@ -68,19 +66,43 @@ impl kt_semaphore {
             drop(cnt);
 
             let mut wait_q = self.wait_q.lock();
-            if let Some((wake_pid, lifeid)) = wait_q.pop() {
-                let current_mode = get_cpu_mode(cpuid);
-                if matches!(current_mode, Mode::Machine | Mode::Machine_IRH) {
-                    unsafe {
-                        KTHREAD_POOL.set_state_by_pid(wake_pid, lifeid, task_state::Ready);
-                    }
-                } else {
-                    drop(wait_q);
-                    trapping(S2Mop::UNBLOCK, Some(&[wake_pid, lifeid, 0, 0, 0]));
-                }
-            }
+            wait_q.pop()
         } else {
             drop(cnt);
+            None
+        }
+    }
+
+    pub fn signal(&mut self, hart: Option<usize>) {
+        let cpuid = hart.unwrap_or(INVAL_KTHREADS_PID);
+        assert_ne!(cpuid, INVAL_KTHREADS_PID);
+
+        if let Some((wake_pid, lifeid)) = self.take_waiter() {
+            let current_mode = get_cpu_mode(cpuid);
+            if matches!(current_mode, Mode::Machine | Mode::Machine_IRH) {
+                unsafe {
+                    KTHREAD_POOL
+                        .set_state_by_pid(wake_pid, lifeid, task_state::Ready)
+                        .unwrap_or_else(|_| panic!("failed to wake semaphore waiter"));
+                }
+            } else {
+                trapping(S2Mop::UNBLOCK, Some(&[wake_pid, lifeid, 0, 0, 0]));
+            }
+        }
+    }
+
+    /// Wake a waiter while already executing inside a trap handler.
+    ///
+    /// Calling `signal()` from `s_trap` would issue a nested S-mode ecall and
+    /// overwrite the interrupted task's trap frame.  The handler already has
+    /// kernel control, so it can publish the Ready state directly.
+    pub fn signal_from_trap(&mut self) {
+        if let Some((wake_pid, lifeid)) = self.take_waiter() {
+            unsafe {
+                KTHREAD_POOL
+                    .set_state_by_pid(wake_pid, lifeid, task_state::Ready)
+                    .unwrap_or_else(|_| panic!("failed to wake semaphore waiter from trap"));
+            }
         }
     }
 }

@@ -38,28 +38,14 @@ impl IntControl for S_lock {
 
 impl IntControl for Critical_Area {
     fn cli() -> usize {
-        let cpuid = which_cpu();
-
-        // assert_eq!(cpuid, 0);
-
-        let current_mode = get_cpu_mode(cpuid);
-
-        if !(current_mode == Mode::Machine || current_mode == Mode::Machine_IRH) {
-            trapping(S2Mop::CLI, None);
-        }
-
-        0
+        // Runtime interrupt handling now lives in S-mode.  Masking the local
+        // supervisor interrupt enables directly keeps lock acquisition from
+        // recursively trapping through an ecall while another lock is held.
+        S_cli()
     }
 
     fn sti(prev_xie: usize) {
-        let cpuid = which_cpu();
-        // assert_eq!(cpuid, 0);
-
-        let current_mode = get_cpu_mode(cpuid);
-
-        if !(current_mode == Mode::Machine || current_mode == Mode::Machine_IRH) {
-            trapping(S2Mop::STI, None);
-        }
+        S_sti(prev_xie)
     }
 }
 

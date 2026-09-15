@@ -1,4 +1,4 @@
-use core::mem::variant_count;
+use core::mem::{size_of, variant_count};
 
 use crate::cpu::{get_cpu_mode, which_cpu, Mode, MAX_HARTS};
 use crate::lock::spin_mutex;
@@ -98,7 +98,7 @@ impl plic_controller {
 
         unsafe {
             let base_pt = self.prio_base as *mut u32;
-            base_pt.add(usz_src).write(new_prio as u32)
+            base_pt.add(usz_src).write_volatile(new_prio as u32)
         }
 
         Ok(())
@@ -111,7 +111,7 @@ impl plic_controller {
         let mut mmio_val: u32;
         unsafe {
             let base_pt = self.prio_base as *mut u32;
-            mmio_val = base_pt.add(usz_src).read();
+            mmio_val = base_pt.add(usz_src).read_volatile();
         }
 
         if mmio_val != reg_val {
@@ -126,7 +126,7 @@ impl plic_controller {
         unsafe {
             let pend_pt = self.pend_base as *mut u32;
 
-            let pend_reg: u32 = pend_pt.add(usz_src / 32).read();
+            let pend_reg: u32 = pend_pt.add(usz_src / 32).read_volatile();
             let mask: u32 = (1 << (usz_src % 32));
 
             if pend_reg & mask == 0 {
@@ -142,10 +142,11 @@ impl plic_controller {
         let usz_src: usize = src.get_src_id() / 32;
         let mask: u32 = (1 << (src.get_src_id() % 32));
         unsafe {
-            let enable_pt = (self.enable_base + (usz_ctx * 0x80 + usz_src)) as *mut u32;
-            let mut enable_reg: u32 = enable_pt.read();
+            let enable_pt =
+                (self.enable_base + usz_ctx * 0x80 + usz_src * size_of::<u32>()) as *mut u32;
+            let mut enable_reg: u32 = enable_pt.read_volatile();
             enable_reg = enable_reg | mask;
-            enable_pt.write(enable_reg);
+            enable_pt.write_volatile(enable_reg);
         }
 
         Ok(())
@@ -156,10 +157,11 @@ impl plic_controller {
         let usz_src: usize = src.get_src_id() / 32;
         let mask: u32 = !(1 << (src.get_src_id() % 32));
         unsafe {
-            let disable_pt = (self.enable_base + (usz_ctx * 0x80 + usz_src)) as *mut u32;
-            let mut disable_reg: u32 = disable_pt.read();
-            disable_reg = disable_reg | mask;
-            disable_pt.write(disable_reg);
+            let disable_pt =
+                (self.enable_base + usz_ctx * 0x80 + usz_src * size_of::<u32>()) as *mut u32;
+            let mut disable_reg: u32 = disable_pt.read_volatile();
+            disable_reg &= mask;
+            disable_pt.write_volatile(disable_reg);
         }
 
         Ok(())
@@ -196,7 +198,7 @@ impl plic_controller {
         let claim_base = self.thres_base as *mut u32;
 
         unsafe {
-            claim_base.add(0x400 * usz_ctx + 1).write(src);
+            claim_base.add(0x400 * usz_ctx + 1).write_volatile(src);
         }
 
         Ok(())

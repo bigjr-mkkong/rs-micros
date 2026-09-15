@@ -2,7 +2,7 @@ use crate::{Mprintln, Sprintln};
 use core::arch::asm;
 use core::mem::size_of;
 use core::ptr;
-use riscv::register::{medeleg, mideleg, mie, mstatus, sie, sstatus};
+use riscv::register::{mstatus, sie, sstatus};
 use spin::Mutex;
 
 use crate::cpu::{which_cpu, SATP_mode, TrapFrame};
@@ -34,27 +34,15 @@ pub fn kinit() -> Result<usize, KError> {
 
     // cpu::mstatus_write((1 << 11) | (1 << 5) as usize);
 
-    /*
-     * Now we only consider sw interrupt, timer and external
-     * interrupt will be enabled in future
-     *
-     * We will delegate all interrupt into S-mode, enable S-mode
-     * interrupt, and then disable M-mode interrupt
-     */
+    // Delegation CSRs are hart-local, so every secondary must install the
+    // same S-mode trap policy as the BSP.
 
     unsafe {
-        mstatus::set_sie();
-        CLINT.set_mtimecmp(current_cpu, u64::MAX);
-
-        mie::set_msoft();
-
-        // mie::set_mtimer();
-
-        mie::set_mext();
-
-        mie::set_sext();
-        sstatus::set_spie();
+        crate::trap::delegate_traps_to_supervisor();
+        crate::trap::enable_machine_timer(current_cpu);
         sie::set_sext();
+        sstatus::set_sie();
+        sstatus::set_spie();
 
         mstatus::set_mpp(mstatus::MPP::Supervisor);
     }
@@ -72,7 +60,6 @@ pub fn kmain() -> Result<(), KError> {
         asm!("ebreak");
 
         Sprintln!("CPU{} Back from trap\n", current_cpu);
-        CLINT.set_mtimecmp(current_cpu, CLINT.read_mtime() + 0x500_000);
 
         let sched_cpu = which_cpu();
 

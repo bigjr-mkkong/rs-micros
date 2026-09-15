@@ -193,10 +193,10 @@ impl task_struct {
         unsafe {
             match self.typ {
                 task_typ::KERN => {
-                    sstatus::set_spp(sstatus::SPP::Supervisor);
+                    mstatus::set_mpp(mstatus::MPP::Supervisor);
                 }
                 task_typ::USER => {
-                    sstatus::set_spp(sstatus::SPP::User);
+                    mstatus::set_mpp(mstatus::MPP::User);
                 }
             }
             let tasktrap_addr = &self.trap_frame as *const TrapFrame;
@@ -524,13 +524,19 @@ impl task_pool {
     }
 
     pub fn get_current_pid(&self, cpuid: usize) -> Result<usize, KError> {
-        if let (Some(cur_taskidx), Some(ref taskvec)) =
-            (self.current_task[cpuid], &self.POOL[cpuid])
-        {
-            Ok(taskvec[cur_taskidx].pid)
-        } else {
-            Err(new_kerror!(KErrorType::EINVAL))
-        }
+        assert!(cpuid < MAX_HARTS, "invalid current-task CPU {}", cpuid);
+        let cur_taskidx = self.current_task[cpuid].ok_or(new_kerror!(KErrorType::EINVAL))?;
+        let taskvec = self.POOL[cpuid]
+            .as_ref()
+            .ok_or(new_kerror!(KErrorType::EINVAL))?;
+        assert!(
+            cur_taskidx < taskvec.len(),
+            "invalid current-task index {} on CPU {} (len {})",
+            cur_taskidx,
+            cpuid,
+            taskvec.len()
+        );
+        Ok(taskvec[cur_taskidx].pid)
 
         // if let Some(cur_taskidx) = self.current_task[cpuid] {
         //     match self.POOL[cpuid] {
@@ -649,6 +655,22 @@ impl task_pool {
         self.in_fallback[cpuid]
     }
 
+    pub fn set_fallback_pc(&mut self, cpuid: usize, newpc: usize) -> Result<(), KError> {
+        let fallback = self.fallback_task[cpuid]
+            .as_mut()
+            .ok_or(new_kerror!(KErrorType::EINVAL))?;
+        fallback.set_pc(newpc);
+        Ok(())
+    }
+
+    pub fn save_fallback_from_ktrapframe(&mut self, cpuid: usize) -> Result<(), KError> {
+        let fallback = self.fallback_task[cpuid]
+            .as_mut()
+            .ok_or(new_kerror!(KErrorType::EINVAL))?;
+        fallback.save();
+        Ok(())
+    }
+
     pub fn sched(&mut self, cpuid: usize) -> Result<(), KError> {
         let live_cnt = self.get_scheduable_cnt(cpuid);
         if live_cnt == 0 {
@@ -670,13 +692,21 @@ impl task_pool {
                     let current_mode = get_cpu_mode(cpuid);
                     if matches!(current_mode, Mode::Machine | Mode::Machine_IRH) {
                         if let task_flag::CRITICAL = taskvec[cur_taskidx].flag {
-                            let prev_xie = M_cli();
+                            // Tasks execute in S-mode even when scheduling was
+                            // entered through the M-mode ecall firmware path.
+                            // Keep MTIP alive and mask the task's S interrupts.
+                            let prev_xie = crate::cpu::S_cli();
                             self.crit_task_intstate[cpuid] = prev_xie;
                         }
 
                         taskvec[cur_taskidx].resume_from_M();
                         Ok(())
                     } else {
+                        if let task_flag::CRITICAL = taskvec[cur_taskidx].flag {
+                            let prev_xie = crate::cpu::S_cli();
+                            self.crit_task_intstate[cpuid] = prev_xie;
+                        }
+
                         taskvec[cur_taskidx].resume_from_S();
                         Ok(())
                     }

@@ -34,6 +34,12 @@ for example `make PREFIX=riscv64-unknown-elf- run`.
 Run `make all` to produce `os.elf`, or `make bitstream` to additionally produce
 the raw `os.bin` image.
 
+Runtime exceptions and the UART external interrupt are handled in S-mode.
+Supervisor ecalls and the CLINT machine timer remain in the M-mode firmware
+path; other runtime M-mode traps are treated as unexpected. Run
+`make test-uart-delegation` to inject a UART byte and verify the S-mode PLIC
+claim/read/complete path automatically.
+
 ## Multicore ktask and semaphore test
 
 Run the automated four-hart stress test with:
@@ -79,6 +85,7 @@ instruction.
   - [x] ksemaphore stress test
   - [Working...] User task
   - [ ] User syscall
+  - [ ] User IPC
 
   **. . .**
 

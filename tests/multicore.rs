@@ -25,11 +25,24 @@ static mut SEMAPHORE: kt_semaphore = kt_semaphore::new(0);
 fn finish_phase(phase: usize) {
     let phases = PHASES_DONE.fetch_or(phase, Ordering::AcqRel) | phase;
     if phases == 0b11 && !FINISHED.swap(true, Ordering::AcqRel) {
+        // MTIP must be serviced independently on every hart while S-mode is
+        // busy scheduling and printing. Give the slowest hart a bounded
+        // window to receive its first tick before declaring success.
+        for _ in 0..10_000_000 {
+            if (0..MAX_HARTS).all(|hart| crate::trap::machine_timer_ticks(hart) > 0) {
+                break;
+            }
+            core::hint::spin_loop();
+        }
+        let machine_timer_ticks: usize = (0..MAX_HARTS).map(crate::trap::machine_timer_ticks).sum();
+        assert!((0..MAX_HARTS).all(|hart| crate::trap::machine_timer_ticks(hart) > 0));
+
         Sprintln!(
-            "[MULTICORE-TEST] PASS workers={} semaphore_waiters={} semaphore_wakes={}",
+            "[MULTICORE-TEST] PASS workers={} semaphore_waiters={} semaphore_wakes={} machine_timer_ticks={}",
             WORKERS_DONE.load(Ordering::Acquire),
             WAITERS_DONE.load(Ordering::Acquire),
-            SEMAPHORE_WAKES.load(Ordering::Acquire)
+            SEMAPHORE_WAKES.load(Ordering::Acquire),
+            machine_timer_ticks
         );
 
         // Let the final UART line drain before terminating QEMU through its

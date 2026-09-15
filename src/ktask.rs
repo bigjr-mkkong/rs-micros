@@ -22,6 +22,9 @@ pub extern "C" fn ktask_extint() {
             Sprintln!("ktask_extint() unblocked");
             match IRQ_BUFFER.peek_req(cpuid) {
                 Ok(Some(new_req)) => {
+                    // dequeue_req() invalidates the ring-buffer reference.
+                    // Copy the request before advancing the queue.
+                    let new_req = *new_req;
                     IRQ_BUFFER.dequeue_req(cpuid);
 
                     let hart = new_req.get_cpuid();
@@ -59,7 +62,9 @@ pub extern "C" fn ktask_extint() {
 
 #[no_mangle]
 pub extern "C" fn ktask_fallback() {
-    trapping(S2Mop::YIELD, None);
+    loop {
+        trapping(S2Mop::YIELD, None);
+    }
 }
 
 #[no_mangle]
